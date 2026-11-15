@@ -3,7 +3,7 @@
 // internet varsa arka planda yeni sürüm indirilir.
 // Kullanıcının kayıtları bu dosyadan hiç geçmez; onlar yalnızca telefonda, şifreli durur.
 
-const CACHE = "mkd-v2";
+const CACHE = "mkd-v3";
 const FILES = ["./", "./index.html", "./style.css", "./sabitler.js", "./app.js", "./sayfalar.js", "./rapor.js", "./manifest.json", "./icon-192.png", "./icon-512.png", "./apple-touch-icon.png"];
 
 self.addEventListener("install", (event) => {
