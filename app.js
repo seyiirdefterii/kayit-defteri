@@ -1,112 +1,49 @@
 "use strict";
 /* =====================================================================
-   KAYIT DEFTERİ 2.0 — uygulamanın tüm davranışı bu dosyada.
-   Bölümler:
-     1. Sabitler (davranış grupları, kurumlar, renkler)
-     2. Yardımcılar
-     3. Telefon içi veritabanı (IndexedDB)
-     4. Şifreleme
-     5. Tema
-     6. Kilit ekranı
-     7. Sayfa geçişleri
-     8. Ana sayfa · 9. Olay formu · 10. Kayıt listesi · 11. Başvurular
-     12. Özet · 13. Rapor · 14. Dilekçe · 15. Ayarlar ve yedek
-     16. Gizlilik perdesi ve otomatik kilit · 17. Başlatma
+   MKD · Mobbing Kayıt Defteri — çekirdek
+   1. Yardımcılar · 2. Veritabanı · 3. Şifreleme ve kasa · 4. Kayıt (save)
+   5. Giriş, kurulum ve kurtarma ekranları · 6. Tarih ve süre hesapları
+   7. Kayıt kuralları (taslak, kesinleştirme, ek, geri çekme)
+   8. Sistematiklik · 9. Belgeler · 10. Paylaşım, e-posta, takvim
+   11. Yedek · 12. Gizlilik perdesi, otomatik kilit, başlatma
    Veriler hiçbir zaman internete gönderilmez.
    ===================================================================== */
 
-/* ---------- 1. SABİTLER ---------- */
-// Heinz Leymann'ın 5 grubu. (*) işaretliler Leymann listesinde yoktur;
-// Türkiye'deki uygulamada sık görüldüğü için eklenmiştir.
-const KATEGORILER = [
-  { k: "k1", kisa: "İletişim", ad: "Kendini gösterme ve iletişim olanaklarının kısıtlanması", dav: [
-    "Kendini ifade etmesinin engellenmesi", "Sözünün sürekli kesilmesi", "Bağırılması / yüksek sesle azarlanması",
-    "Yaptığı işin sürekli eleştirilmesi", "Özel hayatının eleştirilmesi", "Telefonla ya da mesajla rahatsız edilmesi",
-    "Sözlü tehdit", "Yazılı tehdit", "Jest ve bakışlarla küçümsenmesi", "İmalı konuşmalar"] },
-  { k: "k2", kisa: "Sosyal dışlama", ad: "Sosyal ilişkilere saldırı", dav: [
-    "Kimsenin onunla konuşmaması", "Kendisiyle konuşulmasına izin verilmemesi", "Diğerlerinden yalıtılmış bir yerde çalıştırılması",
-    "İş arkadaşlarının onunla konuşmasının yasaklanması", "Yokmuş gibi davranılması", "Toplantı ve bilgi akışından dışlanması (*)"] },
-  { k: "k3", kisa: "İtibar", ad: "Sosyal itibara saldırı", dav: [
-    "Arkasından kötü konuşulması", "Asılsız söylenti yayılması", "Gülünç duruma düşürülmesi", "Akıl sağlığının sorgulanması",
-    "Bir rahatsızlığı ya da engeliyle alay edilmesi", "Görüşü, inancı ya da kökeniyle alay edilmesi", "Özel hayatıyla alay edilmesi",
-    "Küçük düşürücü lakap takılması", "Kararlarının sürekli sorgulanması", "Başkalarının önünde aşağılanması", "Cinsel imalar"] },
-  { k: "k4", kisa: "Mesleki durum", ad: "Yaşam kalitesi ve mesleki duruma saldırı", dav: [
-    "Hiç görev verilmemesi", "Elindeki işlerin alınması", "Anlamsız işler verilmesi", "Yeteneklerinin altında işler verilmesi",
-    "Sürekli yeni ve yetişemeyeceği işler verilmesi", "Onur kırıcı işler verilmesi", "Unvan / görev tanımı dışı görevlendirme (*)",
-    "Çalışma ya da nöbet düzeninin cezalandırıcı şekilde değiştirilmesi (*)", "Haksız iş yükü ya da kota (*)", "Haksız soruşturma ya da disiplin işlemi (*)",
-    "İzin ve haklarının engellenmesi (*)"] },
-  { k: "k5", kisa: "Sağlık", ad: "Sağlığa doğrudan saldırı", dav: [
-    "Sağlığına zarar verecek ağır işlere zorlanması", "Fiziksel şiddet tehdidi", "Gözdağı amaçlı hafif şiddet",
-    "Fiziksel zarar verilmesi", "Cinsel taciz"] }
-];
-const KAT0 = { k: "k0", kisa: "Sınıflandırılmamış", ad: "Sınıflandırılmamış", dav: [] };
-const katBul = (k) => KATEGORILER.find((c) => c.k === k) || KAT0;
-
-const KURUMLAR = [
-  { k: "kurum", ad: "Kurum içi (amir / idare)", gun: 30, bilgi: "Devlet Memurlarının Şikâyet ve Müracaatları Hakkında Yönetmelik'e göre şikâyet hakkında 30 gün içinde karar verilir; karara karşı 10 gün içinde itiraz edilebilir." },
-  { k: "isveren", ad: "İşveren / insan kaynakları", gun: 30, bilgi: "Kesin bir yasal cevap süresi yoktur. Takip için 30 gün varsayıldı." },
-  { k: "cimer", ad: "CİMER", gun: 30, bilgi: "3071 sayılı Kanun uyarınca dilekçelere en geç 30 gün içinde cevap verilmesi gerekir." },
-  { k: "alo170", ad: "ALO 170 / Çalışma Bakanlığı", gun: 30, bilgi: "Takip için 30 gün varsayıldı." },
-  { k: "kdk", ad: "Kamu Denetçiliği Kurumu", gun: 60, bilgi: "Önce idareye başvurulmuş olmalı. Takip için 60 gün varsayıldı; kurumun güncel süresini başvurunda kontrol et." },
-  { k: "tihek", ad: "TİHEK", gun: 60, bilgi: "Takip için 60 gün varsayıldı." },
-  { k: "etik", ad: "Kamu Görevlileri Etik Kurulu", gun: 90, bilgi: "Etik Kurul incelemesini 3 ay içinde tamamlar (5176 s.K. md. 5)." },
-  { k: "tbmm", ad: "TBMM Dilekçe Komisyonu", gun: 60, bilgi: "Takip için 60 gün varsayıldı." },
-  { k: "sendika", ad: "Sendika", gun: 15, bilgi: "Takip için 15 gün varsayıldı." },
-  { k: "avukat", ad: "Avukat / baro", gun: 15, bilgi: "Takip için 15 gün varsayıldı." },
-  { k: "arabulucu", ad: "Arabuluculuk bürosu", gun: 28, bilgi: "Takip için 4 hafta varsayıldı; arabulucunun bildirdiği süreyi gir." },
-  { k: "savcilik", ad: "Cumhuriyet Başsavcılığı", gun: 60, bilgi: "Takip için 60 gün varsayıldı." },
-  { k: "diger", ad: "Diğer", gun: 30, bilgi: "Takip için 30 gün varsayıldı." }
-];
-const kurumBul = (k) => KURUMLAR.find((x) => x.k === k) || KURUMLAR[KURUMLAR.length - 1];
-
-const RENKLER = {
-  yesil: ["#2f6b5e", "#7cc0ae"], lacivert: ["#2c4f86", "#8fb0e8"], mor: ["#5b4a9a", "#b3a5ec"],
-  bordo: ["#8a2f45", "#e899ab"], turuncu: ["#a5521b", "#f0a868"], antrasit: ["#3d4650", "#b5c0cb"]
-};
-const SEV_RENK = ["var(--line)", "#5f9e7a", "#c9a227", "#d17a22", "#c0462b", "#8b1e1e"];
-const SEV_AD = ["Belirtilmedi", "Hafif", "Orta", "Ciddi", "Ağır", "Çok ağır"];
-
-const ITER = 600000;          // PIN'den anahtar türetme tekrar sayısı
-const LS_TEMA = "defter-tema", LS_FAIL = "defter-fail", LS_WIPE = "defter-wipe", LS_V1 = "defter-kasa-v1";
-
-/* ---------- 2. YARDIMCILAR ---------- */
+/* ---------- 1. YARDIMCILAR ---------- */
 const $ = (id) => document.getElementById(id);
 const enc = new TextEncoder(), dec = new TextDecoder();
-const pad = (n) => String(n).padStart(2, "0");
+const pad = (n, l) => String(n).padStart(l || 2, "0");
 const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const nowIso = () => new Date().toISOString();
 function today(){ const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
 function nowTime(){ const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; }
-function trDate(iso){ if(!iso) return "–"; const p = iso.slice(0, 10).split("-"); return `${p[2]}.${p[1]}.${p[0]}`; }
-function trStamp(iso){ if(!iso) return "–"; try { return new Date(iso).toLocaleString("tr-TR", { dateStyle: "short", timeStyle: "short" }); } catch(e){ return iso; } }
-function daysBetween(a, b){ return Math.round((new Date(b.slice(0, 10)) - new Date(a.slice(0, 10))) / 86400000); }
+function localDateOf(iso){ const d = new Date(iso); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }
+function trDate(s){ if(!s) return "–"; const p = s.slice(0, 10).split("-"); return `${p[2]}.${p[1]}.${p[0]}`; }
+function trStamp(iso){ if(!iso) return "–"; try { const d = new Date(iso); return `${pad(d.getDate())}.${pad(d.getMonth() + 1)}.${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`; } catch(e){ return iso; } }
+const AYLAR = ["Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran", "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"];
+const GUNLER = ["Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi"];
+function trLong(s){ const d = s2d(s); return `${d.getUTCDate()} ${AYLAR[d.getUTCMonth()]} ${d.getUTCFullYear()} ${GUNLER[d.getUTCDay()]}`; }
 function esc(s){ return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
-function el(tag, cls, text){ const e = document.createElement(tag); if(cls) e.className = cls; if(text != null) e.textContent = text; return e; }
-function say(id, cls, text){ const m = $(id); if(!m) return; m.className = "msg " + (cls || ""); m.textContent = text || ""; }
-const b64 = (buf) => { const u = new Uint8Array(buf); let s = ""; for(let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
+const b64 = (buf) => { const u = buf instanceof Uint8Array ? buf : new Uint8Array(buf); let s = ""; for(let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000)); return btoa(s); };
 const unb64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
-const validPin = (p) => /^\d{4,8}$/.test(p);
 function lsGet(k, def){ try { const v = localStorage.getItem(k); return v == null ? def : JSON.parse(v); } catch(e){ return def; } }
 function lsSet(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
-function lsDel(k){ try { localStorage.removeItem(k); } catch(e){} }
 function shorten(s, n){ s = String(s || "").replace(/\s+/g, " ").trim(); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+const noStr = (n) => "MKD-" + pad(n, 4);
+let toastT = 0;
+function toast(msg, cls){ const t = $("toast"); t.textContent = msg; t.className = "toast " + (cls || ""); t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; }, 3200); }
 
-// İki adımlı onay: ilk dokunuşta sorar, 5 sn içinde ikinci dokunuşta yapar
-function twoStep(btn, askText, action){
-  const orig = btn.innerHTML;
-  btn.addEventListener("click", () => {
-    if(btn.dataset.armed){ delete btn.dataset.armed; btn.innerHTML = orig; action(); return; }
-    btn.dataset.armed = "1"; btn.textContent = askText;
-    setTimeout(() => { if(btn.dataset.armed){ delete btn.dataset.armed; btn.innerHTML = orig; } }, 5000);
-  });
-}
+const ITER = 600000;
+const LS_FAIL = "mkd-fail", LS_TEMA = "mkd-tema", LS_KVKK = "mkd-kvkk";
 
-/* ---------- 3. VERİTABANI (IndexedDB) ---------- */
+/* ---------- 2. VERİTABANI (IndexedDB) ----------
+   Önceki "Kayıt Defteri" sürümüyle aynı depo adını kullanır; böylece güncellemede veriler yerinde kalır. */
 let DBH = null;
 function openDB(){
   if(DBH) return Promise.resolve(DBH);
   return new Promise((res, rej) => {
     const r = indexedDB.open("defter", 1);
-    r.onupgradeneeded = () => { const d = r.result; d.createObjectStore("kv"); d.createObjectStore("foto"); };
+    r.onupgradeneeded = () => { const d = r.result; if(!d.objectStoreNames.contains("kv")) d.createObjectStore("kv"); if(!d.objectStoreNames.contains("foto")) d.createObjectStore("foto"); };
     r.onsuccess = () => { DBH = r.result; res(DBH); };
     r.onerror = () => rej(r.error);
   });
@@ -118,13 +55,15 @@ const kvSet = async (k, v) => rq((await os("kv", "readwrite")).put(v, k));
 const fotoGet = async (id) => rq((await os("foto", "readonly")).get(id));
 const fotoPut = async (id, v) => rq((await os("foto", "readwrite")).put(v, id));
 const fotoDel = async (id) => rq((await os("foto", "readwrite")).delete(id));
-const clearAll = async () => { await rq((await os("kv", "readwrite")).clear()); await rq((await os("foto", "readwrite")).clear()); };
 
-/* ---------- 4. ŞİFRELEME ---------- */
-let key = null, salt = null, data = null;   // kilit açıkken dolu, kilitliyken boş
+/* ---------- 3. ŞİFRELEME VE KASA ----------
+   Veriler rastgele üretilmiş bir "veri anahtarı" (DEK) ile AES-256-GCM şifrelenir.
+   Veri anahtarı iki ayrı yoldan açılabilir: PIN'den ve kurtarma cevabından türetilen anahtarlar.
+   PIN ve kurtarma cevabı hiçbir yere kaydedilmez. */
+let data = null, dek = null, dekRaw = null, meta = null, saving = Promise.resolve();
 
-async function deriveKey(pin, saltBytes, iter){
-  const base = await crypto.subtle.importKey("raw", enc.encode(pin), "PBKDF2", false, ["deriveKey"]);
+async function deriveKey(secret, saltBytes, iter){
+  const base = await crypto.subtle.importKey("raw", enc.encode(secret), "PBKDF2", false, ["deriveKey"]);
   return crypto.subtle.deriveKey({ name: "PBKDF2", salt: saltBytes, iterations: iter || ITER, hash: "SHA-256" },
     base, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
 }
@@ -134,841 +73,666 @@ async function encBytes(k, bytes){
   return { iv, ct };
 }
 const decBytes = (k, iv, ct) => crypto.subtle.decrypt({ name: "AES-GCM", iv }, k, ct);
+const importDek = (raw) => crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 
-async function persist(){
-  const { iv, ct } = await encBytes(key, enc.encode(JSON.stringify(data)));
-  await kvSet("kasa", { v: 2, iter: ITER, salt: b64(salt), iv: b64(iv), ct: b64(ct) });
+// Kurtarma cevabı: büyük-küçük harf, Türkçe karakter ve fazla boşluk farkı önemsenmez
+function normCevap(s){
+  return String(s || "").normalize("NFC").trim().replace(/\s+/g, " ").toLocaleLowerCase("tr")
+    .replace(/ı/g, "i").replace(/ş/g, "s").replace(/ğ/g, "g").replace(/ü/g, "u").replace(/ö/g, "o").replace(/ç/g, "c")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
-async function openKasa(pin, kasa){
+async function wrapDek(secret, raw){
+  const s = crypto.getRandomValues(new Uint8Array(16));
+  const k = await deriveKey(secret, s, ITER);
+  const { iv, ct } = await encBytes(k, raw);
+  return { salt: b64(s), iter: ITER, iv: b64(iv), ct: b64(ct) };
+}
+async function unwrapDek(secret, w){
+  const k = await deriveKey(secret, unb64(w.salt), w.iter || ITER);
+  return new Uint8Array(await decBytes(k, unb64(w.iv), unb64(w.ct)));
+}
+async function openVeri(raw, kasa){
+  const k = await importDek(raw);
+  const plain = await decBytes(k, unb64(kasa.veri.iv), unb64(kasa.veri.ct));
+  return { k, d: JSON.parse(dec.decode(plain)) };
+}
+// Önceki sürüm (Kayıt Defteri 1-2): veriler doğrudan PIN anahtarıyla şifreliydi
+async function openKasaEski(pin, kasa){
   const s = unb64(kasa.salt);
   const k = await deriveKey(pin, s, kasa.iter || 250000);
   const plain = await decBytes(k, unb64(kasa.iv), unb64(kasa.ct));
-  return { key: k, salt: s, data: JSON.parse(dec.decode(plain)), iter: kasa.iter || 250000 };
+  return { key: k, data: JSON.parse(dec.decode(plain)) };
 }
-// Yeni PIN / yeni tuz ile tüm verileri yeniden şifreler (fotoğraflar dahil)
-async function rekey(newPin){
-  const newSalt = crypto.getRandomValues(new Uint8Array(16));
-  const newKey = await deriveKey(newPin, newSalt, ITER);
-  for(const id of allFotoIds()){
-    const rec = await fotoGet(id); if(!rec) continue;
-    const plain = await decBytes(key, rec.iv, rec.ct);
-    await fotoPut(id, await encBytes(newKey, plain));
+
+function yeniVeri(sektor, hitap){
+  return { v: 3, sektor: sektor || "kamu", profil: { hitap: hitap || "" },
+    ayar: { otoKilit: 60, kurtarmaHatirlat: true, muhurHatirlat: true },
+    sayac: 0, records: [], taslaklar: [], basvurular: [], sayacB: 0, taniklar: [], takipler: [], muhurler: [], gunluk: [],
+    lastBackup: null, kurtarmaSon: nowIso(), olusturma: nowIso() };
+}
+function tamamla(d){
+  const n = yeniVeri(d.sektor, (d.profil || {}).hitap);
+  ["records", "taslaklar", "basvurular", "taniklar", "takipler", "muhurler", "gunluk"].forEach((k) => { if(!Array.isArray(d[k])) d[k] = n[k]; });
+  d.ayar = Object.assign({}, n.ayar, d.ayar || {}); d.profil = d.profil || {};
+  if(typeof d.sayac !== "number") d.sayac = d.records.reduce((m, r) => Math.max(m, r.no || 0), 0);
+  if(typeof d.sayacB !== "number") d.sayacB = d.basvurular.length;
+  return d;
+}
+function gunlukEkle(tur, metin){ if(!data) return; data.gunluk.push({ t: nowIso(), tur, metin }); if(data.gunluk.length > 300) data.gunluk = data.gunluk.slice(-300); }
+
+/* ---------- 4. KAYDETME ----------
+   O anki veri ve anahtar eş zamanlı olarak kopyalanır; böylece kayıt sırasında kilitlense bile son değişiklik kaybolmaz. */
+function save(){
+  if(!data || !dek || !meta) return saving;
+  const snap = JSON.stringify(data), k = dek, m = JSON.parse(JSON.stringify(meta));
+  saving = saving.then(async () => {
+    const { iv, ct } = await encBytes(k, enc.encode(snap));
+    await kvSet("kasa", { v: 3, pin: m.pin, kur: m.kur, veri: { iv: b64(iv), ct: b64(ct) } });
+  }).catch(() => toast("Kaydedilemedi. Telefonda yer kalmamış olabilir.", "err"));
+  return saving;
+}
+
+/* ---------- 5. GİRİŞ, KURULUM VE KURTARMA ---------- */
+let ls = { ekran: "giris", buf: "", msg: "", msgCls: "", tmp: {} };
+const failAll = () => lsGet(LS_FAIL, { pin: { n: 0, until: 0 }, kur: { n: 0, until: 0 }, log: [] });
+function beklemeSuresi(n){ return n < 5 ? 0 : n === 5 ? 60 : n === 6 ? 300 : 1800; }
+function failKaydet(tur){
+  const f = failAll(); const c = f[tur] || { n: 0, until: 0 };
+  c.n++; c.until = Date.now() + beklemeSuresi(c.n) * 1000; f[tur] = c;
+  f.log = (f.log || []).concat({ t: nowIso(), tur }).slice(-100); lsSet(LS_FAIL, f);
+  return c;
+}
+function failSifirla(tur){ const f = failAll(); f[tur] = { n: 0, until: 0 }; lsSet(LS_FAIL, f); }
+function beklemeMetni(ms){ const s = Math.ceil(ms / 1000); return s >= 60 ? `${Math.ceil(s / 60)} dakika` : `${s} saniye`; }
+
+const LOGO = `<div class="mono"><span>MKD</span><i></i></div>`;
+function keypad(okAd){
+  const k = (v, l, cls) => `<button type="button" class="key ${cls || ""}" data-key="${v}" aria-label="${l || v}">${l || v}</button>`;
+  return `<div class="dots" aria-hidden="true">${Array.from({ length: Math.max(4, ls.buf.length) }, (_, i) => `<i class="${i < ls.buf.length ? "on" : ""}"></i>`).join("")}</div>
+    <div class="keys">${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => k(n)).join("")}${k("del", "Sil", "fn")}${k(0)}${k("ok", okAd || "Tamam", "fn ok")}</div>`;
+}
+function lockMsg(){ return `<p class="lmsg ${ls.msgCls}" role="status">${esc(ls.msg)}</p>`; }
+
+function renderLock(){
+  const L = $("lock"), e = ls.ekran;
+  let h = "";
+  if(e === "hosgeldin"){
+    h = `<div class="lpanel wide">${LOGO}
+      <h1>Mobbing Kayıt Defteri</h1>
+      <p class="lsub">İşyerinde yaşadıklarını tarih, kişi ve tanıklarıyla düzenli, sistematik ve güvenilir biçimde kayıt altına al.</p>
+      <ul class="lfeat">
+        <li><b>Değiştirilemez kayıt.</b> Kesinleşen kayıt numaralanır ve kilitlenir; düzeltmeler tarihli ek olarak tutulur.</li>
+        <li><b>Yalnızca bu telefonda, şifreli.</b> Hiçbir sunucuya veri gönderilmez.</li>
+        <li><b>Süre takibi ve rapor.</b> Başvuru sürelerini hesaplar, mahkemeye sunulabilir düzende dosya hazırlar.</li>
+      </ul>
+      <label class="lcheck"><input type="checkbox" id="l-kvkk"> <span><button type="button" class="llink" data-lact="kvkkOku">KVKK bilgilendirmesini</button> okudum, kişisel verilerimin yalnızca bu cihazda işlenmesini onaylıyorum.</span></label>
+      <button class="lbtn" type="button" data-lact="basla" id="l-basla" disabled>Başla</button>
+      ${lockMsg()}</div>`;
+  } else if(e === "kvkk"){
+    h = `<div class="lpanel wide doctext"><button class="llink" type="button" data-lact="geri">‹ Geri</button><h2>KVKK bilgilendirmesi</h2><div class="lkvkk"></div>
+      <button class="lbtn" type="button" data-lact="geri">Okudum</button></div>`;
+  } else if(e === "profil"){
+    h = `<div class="lpanel wide">${LOGO}<h2>Seni tanıyalım</h2>
+      <p class="lsub">Rehber ve süre hesapları buna göre ayarlanır. Sonradan değiştirebilirsin.</p>
+      <div class="lseg" role="group" aria-label="Çalıştığın yer">
+        <button type="button" data-lact="sek" data-v="kamu" aria-pressed="${ls.tmp.sektor !== "ozel"}">Kamu</button>
+        <button type="button" data-lact="sek" data-v="ozel" aria-pressed="${ls.tmp.sektor === "ozel"}">Özel sektör</button></div>
+      <label class="lfield"><span>Sana nasıl hitap edelim? <small>(isteğe bağlı)</small></span><input id="l-hitap" autocomplete="off" value="${esc(ls.tmp.hitap || "")}" placeholder="Örn. Süleyman"></label>
+      <button class="lbtn" type="button" data-lact="profilTamam">Devam</button></div>`;
+  } else if(["pin1", "pin2", "giris", "yenipin1", "yenipin2"].includes(e)){
+    const t = { pin1: ["PIN belirle", "4 ile 8 rakam arasında, tahmin edilmesi zor bir PIN seç."], pin2: ["PIN'i tekrar gir", "Doğrulamak için aynı PIN'i yeniden gir."],
+      giris: [ls.tmp.hitap ? `Merhaba, ${ls.tmp.hitap}` : "Mobbing Kayıt Defteri", "Devam etmek için PIN'ini gir."],
+      yenipin1: ["Yeni PIN belirle", "Kurtarma cevabın doğrulandı. Yeni PIN'ini belirle."], yenipin2: ["Yeni PIN'i tekrar gir", ""] }[e];
+    h = `<div class="lpanel">${LOGO}<h2>${esc(t[0])}</h2><p class="lsub">${esc(t[1])}</p>${keypad(e === "giris" ? "Aç" : "Tamam")}${lockMsg()}
+      ${e === "giris" ? `<button class="llink" type="button" data-lact="unuttum">PIN'imi unuttum</button>` : ""}
+      ${e === "pin1" || e === "pin2" ? `<button class="llink" type="button" data-lact="geriProfil">‹ Geri</button>` : ""}</div>`;
+  } else if(e === "kurtarmaKur" || e === "kurtarmaZorunlu"){
+    h = `<div class="lpanel wide">${LOGO}<h2>Kurtarma sorusu</h2>
+      <p class="lsub">${e === "kurtarmaZorunlu" ? "Bu sürümde PIN'ini unutursan kayıtlarına kurtarma sorusuyla ulaşabilirsin. Devam etmeden önce bir soru belirle." : "PIN'ini unutursan bu soruyla kayıtlarını açıp yeni PIN belirlersin."}</p>
+      <label class="lfield"><span>Soru</span><input id="l-soru" autocomplete="off" placeholder="Örn. En sevdiğim içecek" value="${esc(ls.tmp.soru || "")}"></label>
+      <label class="lfield"><span>Cevap</span><input id="l-cevap" type="password" autocomplete="off"></label>
+      <label class="lfield"><span>Cevabı tekrar yaz</span><input id="l-cevap2" type="password" autocomplete="off"></label>
+      <p class="lhint">Büyük-küçük harf ve Türkçe karakter farkı önemsenmez: "Kahve", "KAHVE" ve "kahve" aynı kabul edilir. Soru giriş ekranında görünür; cevabı başkasının tahmin edemeyeceği bir şey seç ve kimseyle paylaşma.</p>
+      <button class="lbtn" type="button" data-lact="kurtarmaKaydet">${e === "kurtarmaZorunlu" ? "Kaydet ve devam et" : "Defteri oluştur"}</button>${lockMsg()}
+      ${e === "kurtarmaKur" ? `<button class="llink" type="button" data-lact="geriPin">‹ PIN'i yeniden belirle</button>` : ""}</div>`;
+  } else if(e === "kurtarma"){
+    const soru = ls.tmp.soru;
+    h = `<div class="lpanel wide">${LOGO}<h2>PIN'imi unuttum</h2>
+      ${soru ? `<p class="lsub">Kurtarma sorunu cevapla, sonra yeni PIN belirle. Kayıtların yerinde kalır.</p>
+        <div class="lsoru">${esc(soru)}</div>
+        <label class="lfield"><span>Cevap</span><input id="l-kcevap" type="password" autocomplete="off"></label>
+        <button class="lbtn" type="button" data-lact="kurtarmaDene">Doğrula</button>`
+      : `<p class="lsub">Bu defter için kurtarma sorusu belirlenmemiş. Kayıtlar PIN olmadan açılamaz.</p>`}
+      ${lockMsg()}
+      <details class="lmore"><summary>Cevabı da hatırlamıyorum</summary><p>Kayıtlar şifreli olduğu için PIN ya da kurtarma cevabı olmadan kimse açamaz; uygulamada sıfırlama düğmesi bilerek bulunmaz, böylece telefonu ele geçiren biri kayıtlarını silemez. Yedek dosyan varsa yeni bir telefonda ya da defteri yeniden kurduktan sonra yedeği aldığın PIN ile geri yükleyebilirsin. Defteri tamamen sıfırlamak için iPhone'da Ayarlar › Safari › Gelişmiş › Web Sitesi Verileri bölümünden bu sitenin verilerini sil.</p></details>
+      <button class="llink" type="button" data-lact="giriseDon">‹ PIN ile giriş</button></div>`;
+  } else if(e === "bekle"){
+    h = `<div class="lpanel">${LOGO}<h2>${esc(ls.tmp.baslik || "Hazırlanıyor")}</h2><div class="spin"></div><p class="lsub">${esc(ls.tmp.alt || "Şifreleme anahtarı oluşturuluyor, birkaç saniye sürebilir.")}</p></div>`;
   }
-  key = newKey; salt = newSalt;
-  await persist();
+  L.innerHTML = h;
+  if(e === "kvkk") L.querySelector(".lkvkk").appendChild($("tpl-kvkk").content.cloneNode(true));
+  const f = L.querySelector("input:not([type=checkbox])"); if(f && !("ontouchstart" in window)) f.focus();
 }
-function allFotoIds(){ return data.records.flatMap((r) => (r.fotolar || []).map((f) => f.id)); }
-
-// v1 (ilk sürüm) verilerini yeni yapıya taşır
-function upgradeData(d){
-  if(d.v === 2) return d;
-  return {
-    v: 2, sektor: d.sektor || "kamu", profil: { hitap: "" }, ayar: { otoKilit: 60 }, basvurular: [], lastBackup: d.lastBackup || null,
-    records: (d.records || []).map((r) => ({
-      id: r.id, olayZamani: r.olayZamani, kisi: r.kisi, rol: r.rol || "", kategori: "k0", davranis: r.tur || "", siddet: 0,
-      yer: r.yer || "", ne: r.ne || "", soz: r.soz || "", tanik: r.tanik || "", kanit: r.kanit || "",
-      etkiIs: "", etkiSaglik: r.etki || "", fotolar: [], kayitZamani: r.kayitZamani
-    }))
-  };
-}
-
-/* ---------- 5. TEMA ---------- */
-let tema = Object.assign({ renk: "yesil", mod: "auto", boyut: 16 }, lsGet(LS_TEMA, {}));
-const darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
-function applyTheme(){
-  const dark = tema.mod === "dark" || (tema.mod === "auto" && darkMQ.matches);
-  const root = document.documentElement;
-  root.dataset.mode = dark ? "dark" : "light";
-  const c = RENKLER[tema.renk] || RENKLER.yesil;
-  root.style.setProperty("--accent", dark ? c[1] : c[0]);
-  root.style.setProperty("--accent-ink", dark ? "#0f1513" : "#ffffff");
-  root.style.fontSize = (tema.boyut || 16) + "px";
-  const mc = document.querySelector('meta[name="theme-color"]');
-  if(mc) mc.content = dark ? "#111614" : "#f1f3f0";
-  document.querySelectorAll("#modeSeg button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.m === tema.mod));
-  document.querySelectorAll("#sizeSeg button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.s === +tema.boyut)));
-  document.querySelectorAll("#swatches button").forEach((b) => b.setAttribute("aria-pressed", b.dataset.r === tema.renk));
-}
-darkMQ.addEventListener?.("change", applyTheme);
-function buildThemeControls(){
-  const sw = $("swatches");
-  Object.entries(RENKLER).forEach(([ad, c]) => {
-    const b = el("button"); b.type = "button"; b.dataset.r = ad; b.style.background = c[0]; b.setAttribute("aria-label", ad);
-    b.addEventListener("click", () => { tema.renk = ad; lsSet(LS_TEMA, tema); applyTheme(); });
-    sw.appendChild(b);
-  });
-  document.querySelectorAll("#modeSeg button").forEach((b) => b.addEventListener("click", () => { tema.mod = b.dataset.m; lsSet(LS_TEMA, tema); applyTheme(); }));
-  document.querySelectorAll("#sizeSeg button").forEach((b) => b.addEventListener("click", () => { tema.boyut = +b.dataset.s; lsSet(LS_TEMA, tema); applyTheme(); }));
-}
-
-/* ---------- 6. KİLİT EKRANI ---------- */
-let hiddenAt = 0;
-function failState(){ return lsGet(LS_FAIL, { n: 0, until: 0 }); }
+function setMsg(m, cls){ ls.msg = m || ""; ls.msgCls = cls || ""; }
 
 async function showLock(){
   $("app").hidden = true; $("lock").hidden = false; $("curtain").hidden = true;
-  const has = !!(await kvGet("kasa").catch(() => null));
-  $("setup").hidden = has; $("unlock").hidden = !has; $("forgot").hidden = true; $("kvkk-pre").hidden = true;
-  $("u-pin").value = ""; say("u-msg");
+  const kasa = await kvGet("kasa").catch(() => null);
+  ls.buf = ""; setMsg();
+  if(kasa){ ls.ekran = "giris"; ls.tmp = { soru: kasa.kur ? kasa.kur.soru : "", hitap: lsGet("mkd-hitap", "") }; }
+  else { ls.ekran = lsGet(LS_KVKK, false) ? "profil" : "hosgeldin"; ls.tmp = { sektor: "kamu" }; }
+  renderLock();
 }
+
+function kolayPin(p){ return /^(\d)\1+$/.test(p) || "01234567890".includes(p) || "98765432109".includes(p); }
+
+async function keyPress(v){
+  if(v === "del"){ ls.buf = ls.buf.slice(0, -1); setMsg(); return renderLock(); }
+  if(v !== "ok"){ if(ls.buf.length < 8){ ls.buf += v; setMsg(); } renderLock(); return; }
+  const pin = ls.buf, e = ls.ekran;
+  if(!/^\d{4,8}$/.test(pin)){ setMsg("PIN 4 ile 8 rakam arasında olmalı.", "err"); return renderLock(); }
+  if(e === "pin1" || e === "yenipin1"){
+    if(kolayPin(pin)){ ls.buf = ""; setMsg("Bu PIN çok kolay tahmin edilir. Başka bir PIN seç.", "err"); return renderLock(); }
+    ls.tmp.pin = pin; ls.buf = ""; ls.ekran = e === "pin1" ? "pin2" : "yenipin2"; setMsg(); return renderLock();
+  }
+  if(e === "pin2" || e === "yenipin2"){
+    if(pin !== ls.tmp.pin){ ls.buf = ""; ls.tmp.pin = ""; ls.ekran = e === "pin2" ? "pin1" : "yenipin1"; setMsg("İki PIN aynı değil, baştan gir.", "err"); return renderLock(); }
+    ls.buf = "";
+    if(e === "pin2"){ ls.ekran = "kurtarmaKur"; setMsg(); return renderLock(); }
+    return yeniPinKaydet(pin);
+  }
+  if(e === "giris") return tryUnlock(pin);
+}
+
+async function tryUnlock(pin){
+  const f = failAll();
+  if(Date.now() < f.pin.until){ ls.buf = ""; setMsg(`Çok fazla yanlış deneme. ${beklemeMetni(f.pin.until - Date.now())} bekle.`, "err"); return renderLock(); }
+  ls.ekran = "bekle"; ls.tmp.baslik = "Açılıyor"; ls.tmp.alt = "Kayıtların çözülüyor…"; renderLock();
+  const kasa = await kvGet("kasa");
+  try {
+    if(kasa.v === 3){
+      dekRaw = await unwrapDek(pin, kasa.pin);
+      const r = await openVeri(dekRaw, kasa); dek = r.k; data = tamamla(r.d); meta = { pin: kasa.pin, kur: kasa.kur || null };
+    } else {
+      const eski = await openKasaEski(pin, kasa);
+      await eskiSurumdenTasi(pin, eski);
+    }
+  } catch(e){
+    dek = null; dekRaw = null; data = null; meta = null;
+    const c = failKaydet("pin"); const w = beklemeSuresi(c.n);
+    ls.ekran = "giris"; ls.buf = ""; setMsg(w ? `PIN yanlış. ${beklemeMetni(w * 1000)} bekle.` : `PIN yanlış.${c.n >= 3 ? ` (${c.n}. yanlış deneme)` : ""}`, "err"); return renderLock();
+  }
+  failSifirla("pin");
+  girisSonrasi();
+}
+function girisSonrasi(){
+  // Kilitliyken yapılan yanlış denemeleri kayıt altına al ve kullanıcıya göster
+  const f = failAll(), log = f.log || [];
+  if(log.length){
+    const pinN = log.filter((x) => x.tur === "pin").length, kurN = log.filter((x) => x.tur === "kur").length;
+    const metin = `${log.length} yanlış deneme (PIN: ${pinN}, kurtarma sorusu: ${kurN}). İlki ${trStamp(log[0].t)}, sonuncusu ${trStamp(log[log.length - 1].t)}.`;
+    gunlukEkle("deneme", metin); bildirim = { cls: "warn", baslik: "Son girişinden bu yana yanlış deneme yapıldı", metin };
+    f.log = []; lsSet(LS_FAIL, f);
+  }
+  gunlukEkle("giris", "Defter açıldı");
+  lsSet("mkd-hitap", (data.profil && data.profil.hitap) || "");
+  if(!meta.kur){ ls.ekran = "kurtarmaZorunlu"; ls.tmp = {}; setMsg(); renderLock(); return; }
+  save(); enterApp();
+}
+async function eskiSurumdenTasi(pin, eski){
+  dekRaw = crypto.getRandomValues(new Uint8Array(32)); dek = await importDek(dekRaw);
+  const d = eski.data, sorted = (d.records || []).slice().sort((a, b) => (a.kayitZamani || "").localeCompare(b.kayitZamani || ""));
+  const nd = yeniVeri(d.sektor, (d.profil || {}).hitap); nd.profil = Object.assign(nd.profil, d.profil || {});
+  for(const r of sorted){
+    const belgeler = [];
+    for(const f of r.fotolar || []){
+      try { const rec = await fotoGet(f.id); if(!rec) continue; const plain = await decBytes(eski.key, rec.iv, rec.ct); const e2 = await encBytes(dek, plain); await fotoPut(f.id, { iv: e2.iv, ct: e2.ct, tur: "img", mime: "image/jpeg" }); belgeler.push({ id: f.id, ad: f.ad || "", tur: "img", eklenme: f.eklenme || r.kayitZamani }); } catch(e){}
+    }
+    nd.sayac++;
+    nd.records.push({ id: r.id || uid("k"), no: nd.sayac, olayZamani: r.olayZamani, yer: r.yer || "", kisi: r.kisi || "", rol: r.rol || "", kategori: r.kategori || "k0", davranis: r.davranis || r.tur || "",
+      siddet: r.siddet || 0, ne: r.ne || "", soz: r.soz || "", tanikIds: [], tanikAd: r.tanik || "", kanit: r.kanit || "", etkiIs: r.etkiIs || "", etkiSaglik: r.etkiSaglik || r.etki || "",
+      belgeler, taslakBaslangic: r.kayitZamani, kesinlesme: r.kayitZamani, oncekiSurum: true, sonDuzenleme: r.duzenlenme || null, ekler: [], geriCekme: null, gonderimler: [] });
+  }
+  (d.basvurular || []).forEach((a) => {
+    const map = { kurum: "sikayet", isveren: "isveren", cimer: "cimer", alo170: "alo170", kdk: "kdk", tihek: "tihek", etik: "etik", tbmm: "tbmm", sendika: "sendika", avukat: "avukat", arabulucu: "arabulucu", savcilik: "savcilik" };
+    nd.sayacB++;
+    const g = [];
+    if(a.cevapTarihi || a.sonuc) g.push({ id: uid("g"), t: a.kayitZamani || nowIso(), tarih: a.cevapTarihi || a.tarih, tur: a.durum === "Sonuçlandı" ? "sonuc" : "not", metin: a.sonuc || "" });
+    if(a.not) g.push({ id: uid("g"), t: a.kayitZamani || nowIso(), tarih: a.tarih, tur: "not", metin: a.not });
+    nd.basvurular.push({ id: a.id || uid("b"), no: nd.sayacB, tur: map[a.kurum] || "diger", kurum: "", tarih: a.tarih, sayi: a.sayi || "", konu: a.konu || "", sure: a.sure || 30, belgeler: [], kayitZamani: a.kayitZamani || nowIso(), gelismeler: g, geriCekme: a.durum === "Geri çekildi" ? { t: nowIso(), gerekce: "Önceki sürümde geri çekildi olarak işaretlenmişti." } : null });
+  });
+  nd.lastBackup = d.lastBackup || null;
+  data = nd; meta = { pin: await wrapDek(pin, dekRaw), kur: null };
+  gunlukEkle("guncelleme", `Defter MKD sürümüne taşındı (${nd.records.length} kayıt, ${nd.basvurular.length} başvuru).`);
+}
+
+async function kurtarmaKaydet(){
+  const soru = ($("l-soru").value || "").trim(), c1 = $("l-cevap").value, c2 = $("l-cevap2").value;
+  ls.tmp.soru = soru;
+  if(!soru){ setMsg("Bir soru yaz.", "err"); return renderLock(); }
+  if(!normCevap(c1)){ setMsg("Cevabı yaz.", "err"); return renderLock(); }
+  if(normCevap(c1) !== normCevap(c2)){ setMsg("İki cevap aynı değil.", "err"); return renderLock(); }
+  const zorunlu = ls.ekran === "kurtarmaZorunlu";
+  ls.ekran = "bekle"; ls.tmp.baslik = zorunlu ? "Kaydediliyor" : "Defter oluşturuluyor"; ls.tmp.alt = "Şifreleme anahtarları oluşturuluyor, birkaç saniye sürebilir."; renderLock();
+  try {
+    if(!zorunlu){
+      dekRaw = crypto.getRandomValues(new Uint8Array(32)); dek = await importDek(dekRaw);
+      data = yeniVeri(ls.tmp.sektor, ls.tmp.hitap);
+      meta = { pin: await wrapDek(ls.tmp.pin, dekRaw), kur: null };
+      gunlukEkle("kurulum", "Defter oluşturuldu");
+    }
+    const w = await wrapDek(normCevap(c1), dekRaw); w.soru = soru; meta.kur = w;
+    data.kurtarmaSon = nowIso(); gunlukEkle("kurtarma", "Kurtarma sorusu belirlendi");
+    lsSet("mkd-hitap", (data.profil && data.profil.hitap) || "");
+    await save(); ls.tmp = {};
+    enterApp();
+  } catch(e){ ls.ekran = zorunlu ? "kurtarmaZorunlu" : "kurtarmaKur"; setMsg("Telefon kayda izin vermedi. Gizli sekmede değilsen tekrar dene.", "err"); renderLock(); }
+}
+async function kurtarmaDene(){
+  const f = failAll();
+  if(Date.now() < f.kur.until){ setMsg(`Çok fazla yanlış deneme. ${beklemeMetni(f.kur.until - Date.now())} bekle.`, "err"); return renderLock(); }
+  const cevap = normCevap($("l-kcevap").value);
+  if(!cevap){ setMsg("Cevabı yaz.", "err"); return renderLock(); }
+  ls.ekran = "bekle"; ls.tmp.baslik = "Doğrulanıyor"; ls.tmp.alt = ""; renderLock();
+  const kasa = await kvGet("kasa");
+  try {
+    dekRaw = await unwrapDek(cevap, kasa.kur);
+    const r = await openVeri(dekRaw, kasa); dek = r.k; data = tamamla(r.d); meta = { pin: kasa.pin, kur: kasa.kur };
+  } catch(e){
+    dekRaw = null; const c = failKaydet("kur"); const w = beklemeSuresi(c.n);
+    ls.ekran = "kurtarma"; setMsg(w ? `Cevap uyuşmadı. ${beklemeMetni(w * 1000)} bekle.` : "Cevap uyuşmadı.", "err"); return renderLock();
+  }
+  failSifirla("kur"); ls.ekran = "yenipin1"; ls.buf = ""; setMsg(); renderLock();
+}
+async function yeniPinKaydet(pin){
+  ls.ekran = "bekle"; ls.tmp.baslik = "Kaydediliyor"; renderLock();
+  meta.pin = await wrapDek(pin, dekRaw); failSifirla("pin");
+  gunlukEkle("pin", "PIN, kurtarma sorusuyla yenilendi");
+  data.kurtarmaSon = nowIso(); ls.tmp = {};
+  girisSonrasi();
+}
+
+$("lock").addEventListener("click", (ev) => {
+  const k = ev.target.closest("[data-key]"); if(k){ keyPress(k.dataset.key); return; }
+  const a = ev.target.closest("[data-lact]"); if(!a) return;
+  const act = a.dataset.lact;
+  if(act === "kvkkOku"){ ls.ekran = "kvkk"; renderLock(); window.scrollTo(0, 0); }
+  else if(act === "geri"){ ls.ekran = "hosgeldin"; renderLock(); }
+  else if(act === "basla"){ lsSet(LS_KVKK, true); ls.ekran = "profil"; renderLock(); }
+  else if(act === "sek"){ ls.tmp.sektor = a.dataset.v; ls.tmp.hitap = $("l-hitap").value; renderLock(); }
+  else if(act === "profilTamam"){ ls.tmp.hitap = $("l-hitap").value.trim(); ls.ekran = "pin1"; ls.buf = ""; setMsg(); renderLock(); }
+  else if(act === "geriProfil"){ ls.ekran = "profil"; ls.buf = ""; setMsg(); renderLock(); }
+  else if(act === "geriPin"){ ls.ekran = "pin1"; ls.buf = ""; ls.tmp.pin = ""; setMsg(); renderLock(); }
+  else if(act === "kurtarmaKaydet") kurtarmaKaydet();
+  else if(act === "unuttum"){ ls.ekran = "kurtarma"; setMsg(); renderLock(); }
+  else if(act === "kurtarmaDene") kurtarmaDene();
+  else if(act === "giriseDon"){ ls.ekran = "giris"; ls.buf = ""; setMsg(); renderLock(); }
+});
+$("lock").addEventListener("change", (ev) => { if(ev.target.id === "l-kvkk") $("l-basla").disabled = !ev.target.checked; });
+$("lock").addEventListener("keydown", (ev) => {
+  if(ev.key === "Enter"){ const b = $("lock").querySelector(".lbtn"); if(b && ev.target.tagName === "INPUT") b.click(); }
+});
+document.addEventListener("keydown", (ev) => {
+  if($("lock").hidden || !["pin1", "pin2", "giris", "yenipin1", "yenipin2"].includes(ls.ekran)) return;
+  if(/^\d$/.test(ev.key)) keyPress(ev.key); else if(ev.key === "Backspace") keyPress("del"); else if(ev.key === "Enter") keyPress("ok");
+});
+
+const fotoCache = new Map();
 function lock(){
-  key = null; salt = null; data = null;
+  if(data && dek) save();
+  data = null; dek = null; if(dekRaw) dekRaw.fill(0); dekRaw = null; meta = null; bildirim = null;
   fotoCache.forEach((u) => URL.revokeObjectURL(u)); fotoCache.clear();
-  formFotos.forEach((f) => f.url && f.tmp && URL.revokeObjectURL(f.url)); formFotos = [];
-  ["list", "recentList", "appList", "print", "f-thumbs"].forEach((id) => { const n = $(id); if(n) n.textContent = ""; });
-  $("d-metin").value = ""; $("d-out").hidden = true;
+  $("view").textContent = ""; $("print").textContent = "";
   showLock();
 }
-
-$("s-btn").addEventListener("click", async () => {
-  const p1 = $("s-pin").value, p2 = $("s-pin2").value;
-  if(!validPin(p1)) return say("s-msg", "err", "PIN 4 ile 8 arasında rakamdan oluşmalı.");
-  if(p1 !== p2) return say("s-msg", "err", "İki PIN aynı değil.");
-  if(/^(\d)\1+$/.test(p1) || "0123456789".includes(p1) || "9876543210".includes(p1)) return say("s-msg", "err", "Bu PIN çok kolay tahmin edilir. Başka bir PIN seç.");
-  say("s-msg", "", "Hazırlanıyor…"); $("s-btn").disabled = true;
-  try {
-    salt = crypto.getRandomValues(new Uint8Array(16));
-    key = await deriveKey(p1, salt, ITER);
-    data = { v: 2, sektor: document.querySelector('input[name="s-sektor"]:checked').value,
-      profil: { hitap: $("s-ad").value.trim() }, ayar: { otoKilit: 60 }, records: [], basvurular: [], lastBackup: null };
-    await persist();
-    $("s-pin").value = ""; $("s-pin2").value = ""; say("s-msg");
-    enterApp();
-  } catch(e){ say("s-msg", "err", "Telefon kayda izin vermedi. Gizli sekmede değilsen tekrar dene."); }
-  finally { $("s-btn").disabled = false; }
-});
-$("s-kvkk").addEventListener("click", () => {
-  const box = $("kvkk-pre"); box.textContent = "";
-  const back = el("button", "btn ghost", "‹ Geri"); back.type = "button";
-  back.addEventListener("click", () => { box.hidden = true; $("setup").hidden = false; });
-  box.appendChild(back); box.appendChild($("kvkkTpl").content.cloneNode(true));
-  $("setup").hidden = true; box.hidden = false; window.scrollTo(0, 0);
-});
-
-async function tryUnlock(){
-  const fs = failState();
-  if(Date.now() < fs.until) return say("u-msg", "err", `Çok fazla yanlış deneme. ${Math.ceil((fs.until - Date.now()) / 1000)} sn bekle.`);
-  const pin = $("u-pin").value;
-  if(!validPin(pin)) return say("u-msg", "err", "PIN 4 ile 8 rakam arasında olmalı.");
-  say("u-msg", "", "Açılıyor…"); $("u-btn").disabled = true;
-  try {
-    const kasa = await kvGet("kasa");
-    const r = await openKasa(pin, kasa);
-    key = r.key; salt = r.salt; data = upgradeData(r.data);
-    lsSet(LS_FAIL, { n: 0, until: 0 });
-    if(r.iter !== ITER || r.data.v !== 2) await rekey(pin);   // eski sürümden geliyorsa güçlendir
-    $("u-pin").value = ""; say("u-msg");
-    enterApp();
-  } catch(e){
-    const n = fs.n + 1;
-    if(lsGet(LS_WIPE, false) && n >= 10){ await clearAll(); lsSet(LS_FAIL, { n: 0, until: 0 }); say("u-msg", "err", "10 yanlış deneme: tüm veriler silindi."); setTimeout(showLock, 1500); return; }
-    const wait = n >= 5 ? Math.min(300, 30 * Math.pow(2, n - 5)) * 1000 : 0;
-    lsSet(LS_FAIL, { n, until: Date.now() + wait });
-    say("u-msg", "err", wait ? `PIN yanlış. ${wait / 1000} sn bekle.` : "PIN yanlış.");
-    $("u-pin").value = "";
-  } finally { $("u-btn").disabled = false; }
-}
-$("u-btn").addEventListener("click", tryUnlock);
-$("u-pin").addEventListener("keydown", (e) => { if(e.key === "Enter") tryUnlock(); });
-$("u-forgot").addEventListener("click", () => { $("forgot").hidden = !$("forgot").hidden; });
-twoStep($("f-reset"), "Emin misin? Hepsi silinecek", async () => { await clearAll(); lsDel(LS_FAIL); showLock(); });
 $("lockBtn").addEventListener("click", lock);
 
-/* ---------- 7. SAYFA GEÇİŞLERİ ---------- */
-const SAYFALAR = {
-  ana: ["Ana sayfa", null], kayitlar: ["Kayıtlar", null], ekle: ["Yeni olay", null], basvurular: ["Başvurular", null], menu: ["Menü", null],
-  "basvuru-form": ["Başvuru", "basvurular"], ozet: ["Özet ve zaman çizelgesi", "menu"], rapor: ["Rapor ve yazdır", "menu"],
-  dilekce: ["Dilekçe şablonları", "menu"], rehber: ["Rehber", "menu"], kvkk: ["KVKK bilgilendirmesi", "menu"],
-  profil: ["Profil ve tema", "menu"], guvenlik: ["Gizlilik ve güvenlik", "menu"], yedek: ["Yedek", "menu"]
-};
-let current = "ana";
-function go(name, opts){
-  opts = opts || {};
-  if(name === "ekle" && !opts.keepForm) resetForm();
-  if(name === "basvuru-form" && !opts.keepForm) resetAppForm();
-  current = name;
-  Object.keys(SAYFALAR).forEach((p) => { const n = $("p-" + p); if(n) n.hidden = p !== name; });
-  const [title, parent] = SAYFALAR[name];
-  $("pageTitle").textContent = name === "ekle" && editingId ? "Olayı düzenle" : title;
-  $("backBtn").hidden = !parent; $("backBtn").dataset.to = parent || "";
-  const tab = parent || name;
-  document.querySelectorAll(".tabbar button").forEach((b) => b.setAttribute("aria-selected", String(b.dataset.tab === tab)));
-  if(name === "ana") renderHome();
-  if(name === "kayitlar") renderList();
-  if(name === "basvurular") renderApps();
-  if(name === "ozet") renderSummary();
-  if(name === "rapor") prepReport();
-  if(name === "dilekce") prepDilekce();
-  if(name === "profil") fillProfile();
-  if(name === "guvenlik") fillSecurity();
-  if(name === "yedek") showBackupInfo();
-  if(name === "kvkk" && !$("p-kvkk").childElementCount) $("p-kvkk").appendChild($("kvkkTpl").content.cloneNode(true));
-  window.scrollTo(0, 0);
+/* ---------- 6. TARİH VE SÜRE HESAPLARI ----------
+   Tarihler "YYYY-AA-GG" metni olarak tutulur; hesaplar saat dilimi kaymasın diye UTC'de yapılır. */
+const s2d = (s) => { const [y, m, d] = s.slice(0, 10).split("-").map(Number); return new Date(Date.UTC(y, m - 1, d)); };
+const d2s = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
+const addDays = (s, n) => { const d = s2d(s); d.setUTCDate(d.getUTCDate() + n); return d2s(d); };
+function addMonths(s, n){
+  const d = s2d(s), day = d.getUTCDate(); const t = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
+  const last = new Date(Date.UTC(t.getUTCFullYear(), t.getUTCMonth() + 1, 0)).getUTCDate();
+  t.setUTCDate(Math.min(day, last)); return d2s(t);
 }
-document.querySelectorAll(".tabbar button").forEach((b) => b.addEventListener("click", () => go(b.dataset.tab)));
-document.addEventListener("click", (e) => { const t = e.target.closest("[data-go]"); if(t && data) go(t.dataset.go); });
-$("backBtn").addEventListener("click", () => go($("backBtn").dataset.to || "ana"));
-
-function enterApp(){
-  $("lock").hidden = true; $("app").hidden = false;
-  applySektor(); refreshDatalists(); go("ana");
-  if(navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+const daysBetween = (a, b) => Math.round((s2d(b) - s2d(a)) / 86400000);
+const haftaSonu = (s, cumartesiIs) => { const g = s2d(s).getUTCDay(); return g === 0 || (!cumartesiIs && g === 6); };
+const tamTatil = (s) => !!(TATIL[s] && TATIL[s][0] === 1);
+const isGunu = (s, cumartesiIs) => !haftaSonu(s, cumartesiIs) && !tamTatil(s);
+function uzat(s){ let x = s, n = 0; while(!isGunu(x) && n < 20){ x = addDays(x, 1); n++; } return x; }
+function addIsGunu(s, n, cumartesiIs){ let x = s, c = 0; while(c < n){ x = addDays(x, 1); if(isGunu(x, cumartesiIs)) c++; } return x; }
+function adliTatilde(s){ const md = s.slice(5); return md >= "07-20" && md <= "08-31"; }
+// Son gün: tatile denk gelirse ilk iş gününe uzar; idari dava sürelerinde adli tatil kuralı da uygulanır
+function sonGun(ham, opt){
+  opt = opt || {}; let s = ham; const notlar = [];
+  if(opt.adli && adliTatilde(s)){ s = s.slice(0, 4) + "-09-07"; notlar.push("Son gün adli tatile denk geldiği için tatilin bitiminden itibaren 7 gün uzadı (İYUK md. 61)."); }
+  const u = uzat(s); if(u !== s) notlar.push(`Son gün (${trDate(s)}) tatil ya da hafta sonu olduğu için ilk iş gününe uzadı.`);
+  if(TATIL[u] && TATIL[u][0] === 0.5) notlar.push("Son gün arife: öğleden sonra resmî tatildir, işlemini sabahtan yap.");
+  if(+u.slice(0, 4) > TATIL_SON_YIL) notlar.push(`${TATIL_SON_YIL} sonrası resmî tatiller hesaba katılmadı.`);
+  return { son: u, notlar };
 }
-
-/* ---------- Ortak hesaplar ---------- */
-const sortAsc = (a) => a.slice().sort((x, y) => (x.olayZamani || "").localeCompare(y.olayZamani || "") || (x.kayitZamani || "").localeCompare(y.kayitZamani || ""));
-function numbering(){ const m = new Map(); sortAsc(data.records).forEach((r, i) => m.set(r.id, "O-" + String(i + 1).padStart(3, "0"))); return m; }
-function weekKey(iso){ const d = new Date(iso.slice(0, 10)); const day = (d.getDay() + 6) % 7; d.setDate(d.getDate() - day); return d.toISOString().slice(0, 10); }
-function last26Weeks(records){
-  const set = new Set(records.map((r) => weekKey(r.olayZamani)));
-  const out = []; const start = new Date(weekKey(today()));
-  for(let i = 25; i >= 0; i--){ const d = new Date(start); d.setDate(d.getDate() - i * 7); const k = d.toISOString().slice(0, 10); out.push({ k, on: set.has(k) }); }
-  return out;
+function sure(ad, ham, kaynak, opt){
+  const r = sonGun(ham, opt); return { ad, son: r.son, kaynak: kaynak || "", not: [(opt && opt.not) || ""].concat(r.notlar).filter(Boolean).join(" "), yasal: !(opt && opt.takip) };
 }
-function appStatus(a){
-  if(a.durum !== "Bekliyor") return { cls: a.durum === "Sonuçlandı" ? "ok" : "acc", text: a.durum, overdue: false };
-  const gecen = daysBetween(a.tarih, today()), sure = +a.sure || 30;
-  if(gecen > sure) return { cls: "warn", text: `Süre doldu · ${gecen} gün oldu`, overdue: true, gecen };
-  return { cls: "amber", text: `Bekliyor · ${sure - gecen} gün kaldı`, overdue: false };
+// "Ne oldu?" türüne göre son günleri üretir
+function sureHesapla(tur, t){
+  const L = [];
+  if(tur === "basvurdum"){
+    L.push(sure("İdarenin cevap vermesi gereken son gün", addDays(t, 30), "3071 s.K. md. 7 · İYUK md. 10"));
+    L.push(sure("Cevap gelmezse dava açma son günü", addDays(addDays(t, 30), 60), "İYUK md. 10", { adli: true, not: "30 gün içinde cevap verilmezse istek reddedilmiş sayılır; 60 günlük dava süresi bu tarihten başlar." }));
+    L.push(sure("Cevap gelmezse Kamu Denetçiliği Kurumu'na başvuru son günü", addMonths(addDays(t, 60), 6), "6328 s.K. md. 17", { not: "İdare 60 gün içinde cevap vermezse bu sürenin bitiminden itibaren 6 ay." }));
+  } else if(tur === "red"){
+    L.push(sure("İptal / tam yargı davası açma son günü", addDays(t, 60), "İYUK md. 7", { adli: true }));
+    L.push(sure("Kamu Denetçiliği Kurumu'na başvuru son günü", addMonths(t, 6), "6328 s.K. md. 17", { not: "Dava süresi içinde yapılan başvuru dava süresini durdurur." }));
+  } else if(tur === "disiplin"){
+    L.push(sure("Disiplin cezasına itiraz son günü", addDays(t, 7), "657 s.K. md. 135", { not: "Süresinde itiraz edilmeyen ceza kesinleşir." }));
+    L.push(sure("İptal davası (genel süre) son günü", addDays(t, 60), "İYUK md. 7", { adli: true, not: "İtiraz ettiysen dava süresi itirazın sonucuna göre değişebilir; avukatına sor." }));
+  } else if(tur === "sikayetkarar"){
+    L.push(sure("Şikâyet kararına itiraz son günü", addDays(t, 10), "Şikâyet ve Müracaatlar Yönetmeliği"));
+  } else if(tur === "bilgired"){
+    L.push(sure("Bilgi Edinme Değerlendirme Kurulu'na itiraz son günü", addDays(t, 15), "4982 s.K. md. 13", { not: "Kurula itiraz, idari yargıya başvuru süresini durdurur." }));
+  } else if(tur === "suc"){
+    L.push(sure("Savcılığa şikâyet son günü (şikâyete bağlı suçlar)", addMonths(t, 6), "TCK md. 73", { not: "Fiili ve faili öğrendiğin günden itibaren 6 ay. Tehdit gibi bazı suçlar şikâyete bağlı değildir." }));
+  } else if(tur === "fesih"){
+    L.push({ ad: "Haklı nedenle fesih: 6 iş günü", son: addIsGunu(t, 6, true), kaynak: "İş K. md. 26", not: "Temkinli hesap: cumartesi iş günü sayıldı. Süre öğrenmeden itibaren işler; süreklilik gösteren davranışlarda son olaydan başladığı kabul edilir.", yasal: true });
+    L.push(sure("Haklı nedenle fesih: her hâlde 1 yıl", addMonths(t, 12), "İş K. md. 26", { not: "Olaydan itibaren 1 yıl geçtikten sonra fesih hakkı kullanılamaz." }));
+  }
+  return L;
 }
-
-/* ---------- 8. ANA SAYFA ---------- */
-function stat(box, big, small){ const d = el("div", "stat"); d.appendChild(el("b", null, big)); d.appendChild(el("span", null, small)); box.appendChild(d); }
-function renderHome(){
-  const ad = (data.profil && (data.profil.hitap || (data.profil.ad || "").split(" ")[0])) || "";
-  const h = new Date().getHours();
-  $("helloText").textContent = (h < 12 ? "Günaydın" : h < 18 ? "Merhaba" : "İyi akşamlar") + (ad ? ", " + ad : "");
-  $("helloSub").textContent = data.records.length ? "Kayıtların güvende. Bugün bir şey yaşadıysan hemen kaydet." : "Henüz kayıt yok. İlk olayı ortadaki + düğmesiyle ekleyebilirsin.";
-  const R = data.records, cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 30);
-  const s = $("homeStats"); s.textContent = "";
-  stat(s, String(R.length), "toplam olay");
-  stat(s, String(R.filter((r) => new Date(r.olayZamani.slice(0, 10)) >= cutoff).length), "son 30 gün");
-  stat(s, String(data.basvurular.filter((a) => a.durum === "Bekliyor").length), "bekleyen başvuru");
-  const w = last26Weeks(R), on = w.filter((x) => x.on).length;
-  $("contMeter").style.width = (on / 26 * 100) + "%";
-  $("contChip").textContent = `${on}/26 hafta`;
-  const first = sortAsc(R)[0];
-  const ay = first ? Math.floor(daysBetween(first.olayZamani, today()) / 30) : 0;
-  $("contText").textContent = R.length ? `Son 26 haftanın ${on} tanesinde olay kaydın var. İlk kaydından bu yana yaklaşık ${ay} ay geçti. Leymann ölçütü: en az 6 ay boyunca, en az haftada bir.` : "Kayıt ekledikçe davranışların ne kadar düzenli tekrarlandığı burada görünecek.";
-  // Uyarılar
-  const al = $("alerts"); al.textContent = "";
-  data.basvurular.forEach((a) => { const st = appStatus(a); if(st.overdue) addAlert(al, `${kurumBul(a.kurum).ad}: cevap süresi doldu`, `${trDate(a.tarih)} tarihli başvuru · ${st.gecen} gün oldu`, "basvurular", "warn"); });
-  if(R.length && (!data.lastBackup || daysBetween(data.lastBackup, today()) > 7)) addAlert(al, "Yedek almanın zamanı geldi", data.lastBackup ? `Son yedek: ${trDate(data.lastBackup)}` : "Henüz hiç yedek almadın", "yedek", "amber");
-  $("alertsCard").hidden = !al.childElementCount;
-  // Son olaylar
-  const rl = $("recentList"); rl.textContent = "";
-  const nums = numbering();
-  const recent = sortAsc(R).reverse().slice(0, 3);
-  if(!recent.length) rl.appendChild(el("p", "note", "Kayıtların burada görünecek."));
-  recent.forEach((r) => {
-    const b = el("button", "mini-row"); b.type = "button"; b.dataset.go = "kayitlar";
-    const t = el("span", "t"); t.appendChild(el("b", null, `${r.kisi} · ${r.davranis || katBul(r.kategori).kisa}`)); t.appendChild(el("span", "note small", `${nums.get(r.id)} · ${trDate(r.olayZamani)} ${r.olayZamani.slice(11, 16)}`));
-    b.appendChild(t); const c = el("span", "chip", r.siddet ? SEV_AD[r.siddet] : katBul(r.kategori).kisa); b.appendChild(c); rl.appendChild(b);
-  });
+// Başvurunun gelişmelerine göre son günleri üretir
+function basvuruSureleri(b){
+  const tur = turBul(b.tur), G = b.gelismeler || [];
+  const kapandi = !!b.geriCekme || G.some((g) => g.tur === "sonuc");
+  const cevaplandi = G.some((g) => ["olumlu", "olumsuz", "sonuc"].includes(g.tur));
+  const L = [];
+  const cevapHam = tur.isg ? addIsGunu(b.tarih, +b.sure || tur.sure) : addDays(b.tarih, +b.sure || tur.sure);
+  const c = tur.isg ? { ad: "", son: cevapHam, kaynak: tur.kaynak, not: tur.bilgi, yasal: tur.yasal } : sure("", cevapHam, tur.kaynak, { not: tur.bilgi, takip: !tur.yasal });
+  c.ad = tur.yasal ? "Cevap / karar için yasal son gün" : "Takip süresi"; c.tamam = cevaplandi; L.push(c);
+  const kamu = data.sektor === "kamu";
+  if(tur.zimni && kamu && !cevaplandi){
+    L.push(sure("Cevap gelmezse dava açma son günü", addDays(addDays(b.tarih, 30), 60), "İYUK md. 10", { adli: true, not: "30 gün içinde cevap verilmezse istek reddedilmiş sayılır ve dava süresi başlar." }));
+    L.push(sure("Cevap gelmezse KDK'ya başvuru son günü", addMonths(addDays(b.tarih, 60), 6), "6328 s.K. md. 17"));
+  }
+  const red = G.filter((g) => g.tur === "olumsuz").slice(-1)[0];
+  if(red){
+    if(kamu && (tur.zimni || tur.k === "itiraz")) L.push(...sureHesapla("red", red.tarih));
+    if(tur.k === "sikayet") L.push(...sureHesapla("sikayetkarar", red.tarih));
+    if(tur.k === "bilgi") L.push(...sureHesapla("bilgired", red.tarih));
+  }
+  L.forEach((x) => { if(kapandi) x.tamam = true; });
+  return L;
 }
-function addAlert(box, title, sub, goTo, cls){
-  const b = el("button", "mini-row"); b.type = "button"; b.dataset.go = goTo;
-  const t = el("span", "t"); t.appendChild(el("b", null, title)); t.appendChild(el("span", "note small", sub)); b.appendChild(t);
-  b.appendChild(el("span", "chip " + cls, cls === "warn" ? "Önemli" : "Hatırlatma")); box.appendChild(b);
+function kalanGun(son){ return daysBetween(today(), son); }
+function sureDurum(x){
+  if(x.tamam) return { cls: "done", txt: "Tamamlandı" };
+  const k = kalanGun(x.son);
+  if(k < 0) return { cls: "past", txt: `${-k} gün önce doldu` };
+  if(k === 0) return { cls: "crit", txt: "Bugün son gün" };
+  if(k <= 3) return { cls: "crit", txt: `${k} gün kaldı` };
+  if(k <= 14) return { cls: "soon", txt: `${k} gün kaldı` };
+  return { cls: "ok", txt: `${k} gün kaldı` };
+}
+function tumSureler(){
+  const out = [];
+  data.basvurular.forEach((b) => basvuruSureleri(b).forEach((x) => out.push(Object.assign({ kaynakAd: `B-${pad(b.no, 3)} · ${turBul(b.tur).ad}`, git: ["basvuru", b.id] }, x))));
+  data.takipler.forEach((t) => sureHesapla(t.tur, t.tarih).forEach((x) => out.push(Object.assign({ kaynakAd: (HESAP_TURLERI.find((h) => h.k === t.tur) || {}).ad + (t.not ? " · " + t.not : ""), git: ["takip", t.id] }, x))));
+  return out.sort((a, b) => a.son.localeCompare(b.son));
 }
 
-/* ---------- 9. OLAY FORMU ---------- */
-let editingId = null, formSiddet = 0, formFotos = [], removedFotos = [];
-const fotoCache = new Map();
+/* ---------- 7. KAYIT KURALLARI ----------
+   Kesinleşen kayıt değiştirilmez ve silinmez. Yalnızca ek/düzeltme, gönderim notu ve geri çekme işareti eklenebilir. */
+const aktifKayitlar = () => data.records.filter((r) => !r.geriCekme);
+const kayitSirali = (R) => R.slice().sort((a, b) => (a.olayZamani || "").localeCompare(b.olayZamani || "") || a.no - b.no);
+const kayitBul = (id) => data.records.find((r) => r.id === id);
+const taslakBul = (id) => data.taslaklar.find((r) => r.id === id);
+const tanikBul = (id) => data.taniklar.find((t) => t.id === id);
+function yeniTaslak(){
+  const t = { id: uid("t"), olusturma: nowIso(), guncelleme: nowIso(), adim: 0, olayTarih: today(), olaySaat: nowTime(), yer: "", kisi: "", rol: "",
+    kategori: "k1", davranis: "", davranisDiger: "", siddet: 0, ne: "", soz: "", tanikIds: [], kanit: "", etkiIs: "", etkiSaglik: "", belgeler: [] };
+  data.taslaklar.push(t); return t;
+}
+function taslakDavranis(t){ return t.davranis === "__diger" ? (t.davranisDiger || "").trim() : t.davranis; }
+function taslakEksik(t){
+  const e = [];
+  if(!t.olayTarih || !t.olaySaat) e.push("olay tarihi ve saati");
+  if(`${t.olayTarih}T${t.olaySaat}` > `${today()}T${nowTime()}`) e.push("ileri bir tarih girilemez");
+  if(!(t.kisi || "").trim()) e.push("davranışı yapan kişi");
+  if(!taslakDavranis(t)) e.push("davranış");
+  if(!(t.ne || "").trim()) e.push("olayın anlatımı");
+  return e;
+}
+function kesinlestir(t){
+  data.sayac = (data.sayac || 0) + 1;
+  const r = { id: uid("k"), no: data.sayac, olayZamani: `${t.olayTarih}T${t.olaySaat}`, yer: t.yer.trim(), kisi: t.kisi.trim(), rol: t.rol.trim(),
+    kategori: t.kategori, davranis: taslakDavranis(t), siddet: t.siddet || 0, ne: t.ne.trim(), soz: t.soz.trim(),
+    tanikIds: t.tanikIds.slice(), tanikAd: t.tanikIds.map((id) => (tanikBul(id) || {}).ad).filter(Boolean).join(", "),
+    kanit: t.kanit.trim(), etkiIs: t.etkiIs.trim(), etkiSaglik: t.etkiSaglik.trim(), belgeler: t.belgeler.slice(),
+    taslakBaslangic: t.olusturma, kesinlesme: nowIso(), ekler: [], geriCekme: null, gonderimler: [] };
+  data.records.push(r); data.taslaklar = data.taslaklar.filter((x) => x.id !== t.id);
+  return r;
+}
+function gecikme(r){
+  const g = daysBetween(r.olayZamani.slice(0, 10), localDateOf(r.kesinlesme));
+  return g <= 0 ? { cls: "ok", txt: "Olay günü kaydedildi" } : { cls: g <= 3 ? "soon" : "past", txt: `Olaydan ${g} gün sonra kaydedildi` };
+}
 
-function fillKatSelect(sel, withAll){
-  sel.textContent = "";
-  if(withAll){ const o = el("option", null, "Tüm gruplar"); o.value = ""; sel.appendChild(o); }
-  KATEGORILER.forEach((c) => { const o = el("option", null, `${c.kisa} — ${c.ad}`); o.value = c.k; sel.appendChild(o); });
-  if(withAll && data && data.records.some((r) => r.kategori === "k0")){ const o = el("option", null, "Sınıflandırılmamış"); o.value = "k0"; sel.appendChild(o); }
+/* ---------- 8. SİSTEMATİKLİK ---------- */
+function weekKey(s){ const d = s2d(s); const g = (d.getUTCDay() + 6) % 7; d.setUTCDate(d.getUTCDate() - g); return d2s(d); }
+function sistematik(R){
+  R = kayitSirali(R);
+  if(!R.length) return null;
+  const ilk = R[0].olayZamani.slice(0, 10), son = R[R.length - 1].olayZamani.slice(0, 10);
+  const gun = daysBetween(ilk, son) + 1;
+  const hSet = new Set(R.map((r) => weekKey(r.olayZamani)));
+  const hSpan = Math.floor(daysBetween(weekKey(ilk), weekKey(son)) / 7) + 1;
+  let seri = 0, enUzun = 0; for(let w = weekKey(ilk); w <= weekKey(son); w = addDays(w, 7)){ if(hSet.has(w)){ seri++; enUzun = Math.max(enUzun, seri); } else seri = 0; }
+  const grup = {}; R.forEach((r) => { grup[r.kategori] = (grup[r.kategori] || 0) + 1; });
+  const dav = {}; R.forEach((r) => { if(r.davranis) dav[r.davranis] = (dav[r.davranis] || 0) + 1; });
+  const sv = R.filter((r) => r.siddet), yarim = Math.floor(sv.length / 2);
+  const ort = (a) => a.length ? a.reduce((x, r) => x + r.siddet, 0) / a.length : 0;
+  const trend = sv.length >= 4 ? ort(sv.slice(yarim)) - ort(sv.slice(0, yarim)) : null;
+  return { n: R.length, ilk, son, gun, hafta: hSet.size, hSpan, oran: hSet.size / hSpan, enUzun, grup, dav, trend, ortSiddet: ort(sv),
+    sureYuzde: Math.min(1, gun / 182), siklikYuzde: hSet.size / hSpan, tanikli: R.filter((r) => r.tanikIds.length || r.tanikAd).length,
+    belgeli: R.filter((r) => r.belgeler.length || r.kanit).length, ayniGun: R.filter((r) => gecikme(r).cls === "ok").length };
 }
-function fillDavSelect(){
-  const c = katBul($("f-kat").value), s = $("f-dav"); s.textContent = "";
-  c.dav.forEach((d) => { const o = el("option", null, d); o.value = d; s.appendChild(o); });
-  const o = el("option", null, "Diğer (kendim yazacağım)"); o.value = "__diger"; s.appendChild(o);
-  $("f-dav-diger-wrap").hidden = s.value !== "__diger";
+function kisiBazli(R){
+  const m = {}; R.forEach((r) => { (m[r.kisi] = m[r.kisi] || []).push(r); });
+  return Object.entries(m).map(([k, L]) => ({ kisi: k, rol: L[L.length - 1].rol, s: sistematik(L) })).sort((a, b) => b.s.n - a.s.n);
 }
-$("f-kat").addEventListener("change", fillDavSelect);
-$("f-dav").addEventListener("change", () => { $("f-dav-diger-wrap").hidden = $("f-dav").value !== "__diger"; });
-document.querySelectorAll("#f-siddet button").forEach((b) => b.addEventListener("click", () => { formSiddet = +b.dataset.v; paintScale(); }));
-function paintScale(){ document.querySelectorAll("#f-siddet button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.v === formSiddet))); }
 
-function resetForm(){
-  editingId = null; formSiddet = 0; removedFotos = [];
-  formFotos.forEach((f) => f.tmp && URL.revokeObjectURL(f.url)); formFotos = [];
-  $("f-tarih").value = today(); $("f-saat").value = nowTime();
-  ["f-yer", "f-kim", "f-rol", "f-ne", "f-soz", "f-tanik", "f-kanit", "f-etkiIs", "f-etkiSag", "f-dav-diger"].forEach((id) => { $(id).value = ""; });
-  $("f-kat").value = "k1"; fillDavSelect(); paintScale(); renderFormFotos();
-  $("editBanner").hidden = true; $("cancelEdit").hidden = true; $("saveBtn").textContent = "Kaydet"; say("formMsg");
-}
-function startEdit(id){
-  const r = data.records.find((x) => x.id === id); if(!r) return;
-  go("ekle", { keepForm: true });
-  editingId = id; removedFotos = [];
-  $("f-tarih").value = r.olayZamani.slice(0, 10); $("f-saat").value = r.olayZamani.slice(11, 16);
-  $("f-yer").value = r.yer || ""; $("f-kim").value = r.kisi || ""; $("f-rol").value = r.rol || "";
-  $("f-kat").value = r.kategori === "k0" ? "k1" : r.kategori; fillDavSelect();
-  const known = katBul($("f-kat").value).dav.includes(r.davranis);
-  $("f-dav").value = known ? r.davranis : "__diger"; $("f-dav-diger-wrap").hidden = known; $("f-dav-diger").value = known ? "" : (r.davranis || "");
-  formSiddet = r.siddet || 0; paintScale();
-  $("f-ne").value = r.ne || ""; $("f-soz").value = r.soz || ""; $("f-tanik").value = r.tanik || ""; $("f-kanit").value = r.kanit || "";
-  $("f-etkiIs").value = r.etkiIs || ""; $("f-etkiSag").value = r.etkiSaglik || "";
-  formFotos = (r.fotolar || []).map((f) => ({ id: f.id, ad: f.ad, eklenme: f.eklenme, tmp: false }));
-  renderFormFotos();
-  $("editBanner").hidden = false; $("cancelEdit").hidden = false; $("saveBtn").textContent = "Değişiklikleri kaydet";
-  $("pageTitle").textContent = "Olayı düzenle";
-}
-$("cancelEdit").addEventListener("click", () => go("kayitlar"));
-
-// Fotoğrafı küçült ve konum/cihaz bilgilerini at (yeniden çizerek)
+/* ---------- 9. BELGELER (fotoğraf ve PDF) ---------- */
 function processImage(file){
   return new Promise((res, rej) => {
     const url = URL.createObjectURL(file), img = new Image();
     img.onload = () => {
-      const max = 1600, sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
+      const max = 2000, sc = Math.min(1, max / Math.max(img.naturalWidth, img.naturalHeight));
       const c = document.createElement("canvas"); c.width = Math.round(img.naturalWidth * sc); c.height = Math.round(img.naturalHeight * sc);
-      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
-      URL.revokeObjectURL(url);
-      c.toBlob((b) => b ? res(b) : rej(new Error("dönüştürülemedi")), "image/jpeg", 0.82);
+      c.getContext("2d").drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url);
+      c.toBlob((b) => b ? res(b) : rej(new Error("dönüştürülemedi")), "image/jpeg", 0.85);
     };
     img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("okunamadı")); };
     img.src = url;
   });
 }
-$("f-fotoBtn").addEventListener("click", () => { $("f-foto").value = ""; $("f-foto").click(); });
-$("f-foto").addEventListener("change", async () => {
-  const files = [...$("f-foto").files];
-  say("formMsg", "", files.length ? "Fotoğraflar hazırlanıyor…" : "");
+// Dosyaları şifreleyip depoya koyar; belge bilgilerini döndürür
+async function belgeleriAl(files){
+  const out = [];
   for(const f of files){
-    try { const blob = await processImage(f); formFotos.push({ id: uid("f"), blob, url: URL.createObjectURL(blob), ad: "", tmp: true }); }
-    catch(e){ say("formMsg", "err", "Bir fotoğraf okunamadı."); }
+    try {
+      const pdf = f.type === "application/pdf" || /\.pdf$/i.test(f.name);
+      if(pdf && f.size > 20 * 1024 * 1024){ toast("PDF 20 MB'tan büyük olamaz.", "err"); continue; }
+      const blob = pdf ? f : await processImage(f);
+      const id = uid("f"), e = await encBytes(dek, await blob.arrayBuffer());
+      await fotoPut(id, { iv: e.iv, ct: e.ct, tur: pdf ? "pdf" : "img", mime: pdf ? "application/pdf" : "image/jpeg" });
+      out.push({ id, ad: pdf ? f.name.replace(/\.pdf$/i, "") : "", tur: pdf ? "pdf" : "img", eklenme: nowIso(), boyut: blob.size });
+    } catch(e){ toast("Bir dosya okunamadı.", "err"); }
   }
-  renderFormFotos(); if(files.length) say("formMsg", "ok", `${files.length} fotoğraf eklendi. Kaydet'e basmayı unutma.`);
-});
-async function renderFormFotos(){
-  const box = $("f-thumbs"); box.className = "flist"; box.textContent = "";
-  for(const f of formFotos){
-    const row = el("div", "frow");
-    const img = el("img"); img.alt = ""; row.appendChild(img);
-    const inp = el("input"); inp.placeholder = "Açıklama (örn. WhatsApp mesajı)"; inp.value = f.ad || ""; inp.addEventListener("input", () => { f.ad = inp.value; }); row.appendChild(inp);
-    const del = el("button", null, "✕"); del.type = "button"; del.setAttribute("aria-label", "Fotoğrafı kaldır");
-    del.addEventListener("click", () => { if(!f.tmp) removedFotos.push(f.id); else URL.revokeObjectURL(f.url); formFotos = formFotos.filter((x) => x !== f); renderFormFotos(); });
-    row.appendChild(del); box.appendChild(row);
-    img.src = f.tmp ? f.url : (await fotoUrl(f.id)) || "";
-  }
+  return out;
 }
-async function fotoUrl(id){
+async function belgeBlob(id){
+  const rec = await fotoGet(id); if(!rec || !dek) return null;
+  const buf = await decBytes(dek, rec.iv, rec.ct);
+  return new Blob([buf], { type: rec.mime || (rec.tur === "pdf" ? "application/pdf" : "image/jpeg") });
+}
+async function belgeUrl(id){
   if(fotoCache.has(id)) return fotoCache.get(id);
-  try {
-    const rec = await fotoGet(id); if(!rec || !key) return null;
-    const buf = await decBytes(key, rec.iv, rec.ct);
-    const u = URL.createObjectURL(new Blob([buf], { type: "image/jpeg" })); fotoCache.set(id, u); return u;
-  } catch(e){ return null; }
+  try { const b = await belgeBlob(id); if(!b) return null; const u = URL.createObjectURL(b); fotoCache.set(id, u); return u; } catch(e){ return null; }
 }
-async function fotoDataUrl(id){
-  const rec = await fotoGet(id); if(!rec) return null;
-  const buf = await decBytes(key, rec.iv, rec.ct);
-  return "data:image/jpeg;base64," + b64(buf);
+async function belgeDataUrl(id){ const b = await belgeBlob(id); if(!b) return null; return "data:image/jpeg;base64," + b64(await b.arrayBuffer()); }
+async function belgeAc(id, ad, tur){
+  const u = await belgeUrl(id); if(!u) return toast("Belge açılamadı.", "err");
+  if(tur === "pdf"){ const w = window.open(u, "_blank"); if(!w){ const a = document.createElement("a"); a.href = u; a.target = "_blank"; a.rel = "noopener"; document.body.appendChild(a); a.click(); a.remove(); } return; }
+  $("viewerImg").src = u; $("viewerCap").textContent = ad || ""; $("viewer").hidden = false;
 }
-
-$("form").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  const tarih = $("f-tarih").value, saat = $("f-saat").value, kim = $("f-kim").value.trim(), ne = $("f-ne").value.trim();
-  if(!tarih || !saat || !kim || !ne) return say("formMsg", "err", "Tarih, saat, kişi ve olayın anlatımı zorunlu.");
-  const davranis = $("f-dav").value === "__diger" ? $("f-dav-diger").value.trim() : $("f-dav").value;
-  if(!davranis) return say("formMsg", "err", "Davranışı seç ya da kısaca yaz.");
-  $("saveBtn").disabled = true; say("formMsg", "", "Kaydediliyor…");
-  try {
-    const fotolar = [];
-    for(const f of formFotos){
-      if(f.tmp){ await fotoPut(f.id, await encBytes(key, await f.blob.arrayBuffer())); fotoCache.set(f.id, f.url); f.tmp = false; }
-      fotolar.push({ id: f.id, ad: (f.ad || "").trim(), eklenme: f.eklenme || new Date().toISOString() });
-    }
-    const fields = { olayZamani: `${tarih}T${saat}`, kisi: kim, rol: $("f-rol").value.trim(), kategori: $("f-kat").value, davranis,
-      siddet: formSiddet, yer: $("f-yer").value.trim(), ne, soz: $("f-soz").value.trim(), tanik: $("f-tanik").value.trim(),
-      kanit: $("f-kanit").value.trim(), etkiIs: $("f-etkiIs").value.trim(), etkiSaglik: $("f-etkiSag").value.trim(), fotolar };
-    if(editingId){
-      const r = data.records.find((x) => x.id === editingId);
-      Object.assign(r, fields, { duzenlenme: new Date().toISOString() });
-    } else {
-      data.records.push(Object.assign({ id: uid("k"), kayitZamani: new Date().toISOString() }, fields));
-    }
-    await persist();
-    for(const id of removedFotos){ await fotoDel(id).catch(() => {}); }
-    const wasEdit = !!editingId;
-    formFotos = []; refreshDatalists(); resetForm();
-    say("formMsg", "ok", wasEdit ? "Değişiklikler kaydedildi." : `Kaydedildi. Toplam ${data.records.length} olay.`);
-    if(wasEdit) go("kayitlar");
-  } catch(e){ say("formMsg", "err", "Kaydedilemedi. Telefonda yer kalmamış olabilir."); }
-  finally { $("saveBtn").disabled = false; }
-});
-
-function refreshDatalists(){
-  const fill = (id, vals) => { const d = $(id); d.textContent = ""; vals.forEach((v) => { const o = document.createElement("option"); o.value = v; d.appendChild(o); }); };
-  fill("kisiler", uniq("kisi")); fill("roller", uniq("rol"));
-}
-function uniq(k){ return [...new Set(data.records.map((r) => r[k]).filter(Boolean))].sort((a, b) => a.localeCompare(b, "tr")); }
-
-/* ---------- 10. KAYIT LİSTESİ ---------- */
-function fillSelect(sel, values, allLabel){
-  const cur = sel.value; sel.textContent = "";
-  const o = el("option", null, allLabel); o.value = ""; sel.appendChild(o);
-  values.forEach((v) => { const op = el("option", null, v); op.value = v; sel.appendChild(op); });
-  if(values.includes(cur)) sel.value = cur;
-}
-function renderList(){
-  fillSelect($("q-kim"), uniq("kisi"), "Herkes");
-  const katSel = $("q-kat"), keep = katSel.value; fillKatSelect(katSel, true); katSel.value = keep;
-  const list = $("list"); list.textContent = "";
-  const q = $("q-ara").value.trim().toLocaleLowerCase("tr"), fk = $("q-kim").value, fc = katSel.value;
-  const nums = numbering();
-  if(!data.records.length){
-    const e = el("div", "empty"); e.appendChild(el("b", null, "Henüz kayıt yok"));
-    e.appendChild(el("span", null, "İlk olayı alttaki + düğmesiyle ekle. Kayıtların burada en yenisi üstte görünür."));
-    list.appendChild(e); $("listCount").textContent = ""; return;
-  }
-  const rows = sortAsc(data.records).reverse().filter((r) => (!fk || r.kisi === fk) && (!fc || r.kategori === fc) &&
-    (!q || [r.kisi, r.rol, r.yer, r.ne, r.soz, r.tanik, r.kanit, r.davranis].join(" ").toLocaleLowerCase("tr").includes(q)));
-  $("listCount").textContent = `${rows.length} kayıt gösteriliyor`;
-  if(!rows.length){ list.appendChild(el("div", "empty", "Bu aramaya uyan kayıt yok.")); return; }
-  rows.forEach((r) => list.appendChild(entryCard(r, nums.get(r.id))));
-}
-function entryCard(r, no){
-  const c = el("article", "entry"); c.style.setProperty("--sev", SEV_RENK[r.siddet || 0]);
-  const top = el("div", "entry-top"); top.appendChild(el("span", "no", no)); top.appendChild(el("span", "when", `${trDate(r.olayZamani)}  ${r.olayZamani.slice(11, 16)}`)); c.appendChild(top);
-  c.appendChild(el("div", "who", r.kisi + (r.rol ? " · " + r.rol : "")));
-  const chips = el("div", "chips");
-  chips.appendChild(el("span", "chip acc", katBul(r.kategori).kisa));
-  if(r.davranis) chips.appendChild(el("span", "chip", r.davranis));
-  if(r.siddet) chips.appendChild(el("span", "chip " + (r.siddet >= 4 ? "warn" : r.siddet >= 3 ? "amber" : ""), "Şiddet " + r.siddet + " · " + SEV_AD[r.siddet]));
-  if(r.yer) chips.appendChild(el("span", "chip", r.yer));
-  c.appendChild(chips);
-  c.appendChild(el("p", null, r.ne));
-  if(r.soz) c.appendChild(el("p", "quote", "“" + r.soz + "”"));
-  const kv = el("dl", "kv"); let any = false;
-  [["Tanıklar", r.tanik], ["Kanıt", r.kanit], ["İşine etkisi", r.etkiIs], ["Sağlığına etkisi", r.etkiSaglik]].forEach(([k, v]) => { if(v){ any = true; kv.appendChild(el("dt", null, k)); kv.appendChild(el("dd", null, v)); } });
-  if(any) c.appendChild(kv);
-  if(r.fotolar && r.fotolar.length){
-    const th = el("div", "thumbs");
-    r.fotolar.forEach(async (f) => {
-      const t = el("div", "thumb"); const img = el("img"); img.alt = f.ad || "Fotoğraf"; t.appendChild(img);
-      if(f.ad) t.appendChild(el("span", "cap", f.ad));
-      t.addEventListener("click", async () => openViewer(await fotoUrl(f.id), f.ad));
-      th.appendChild(t); img.src = (await fotoUrl(f.id)) || "";
-    });
-    c.appendChild(th);
-  }
-  const foot = el("div", "entry-top");
-  foot.appendChild(el("span", "stamp", "Kayda geçti: " + trStamp(r.kayitZamani) + (r.duzenlenme ? " · Düzenlendi: " + trStamp(r.duzenlenme) : "")));
-  const btns = el("div", "btns");
-  const ed = el("button", "btn ghost small", "Düzenle"); ed.type = "button"; ed.addEventListener("click", () => startEdit(r.id));
-  const del = el("button", "btn ghost danger small", "Sil"); del.type = "button"; twoStep(del, "Emin misin?", () => removeRec(r.id));
-  btns.appendChild(ed); btns.appendChild(del); foot.appendChild(btns); c.appendChild(foot);
-  return c;
-}
-async function removeRec(id){
-  const r = data.records.find((x) => x.id === id); if(!r) return;
-  data.records = data.records.filter((x) => x.id !== id);
-  await persist();
-  for(const f of r.fotolar || []){ await fotoDel(f.id).catch(() => {}); }
-  refreshDatalists(); renderList();
-}
-["q-ara", "q-kim", "q-kat"].forEach((id) => $(id).addEventListener(id === "q-ara" ? "input" : "change", renderList));
-function openViewer(url, cap){ if(!url) return; $("viewerImg").src = url; $("viewerCap").textContent = cap || ""; $("viewer").hidden = false; }
 $("viewerClose").addEventListener("click", () => { $("viewer").hidden = true; $("viewerImg").src = ""; });
-
-/* ---------- 11. BAŞVURULAR ---------- */
-let editingApp = null;
-(function(){ const s = $("b-kurum"); KURUMLAR.forEach((k) => { const o = el("option", null, k.ad); o.value = k.k; s.appendChild(o); }); })();
-function kurumInfo(){
-  const k = kurumBul($("b-kurum").value);
-  let t = k.bilgi;
-  if(k.k === "kurum" && data && data.sektor === "kamu") t += " İdareye yapılan başvuruya 30 gün içinde cevap verilmezse istek reddedilmiş sayılır (İYUK md. 10) ve dava süresi işlemeye başlayabilir. Süreleri kaçırmamak için avukatına danış.";
-  $("b-info").textContent = t;
+async function hydrateImgs(root){
+  for(const img of (root || document).querySelectorAll("img[data-foto]")){ const u = await belgeUrl(img.dataset.foto); if(u) img.src = u; img.removeAttribute("data-foto"); }
 }
-$("b-kurum").addEventListener("change", () => { $("b-sure").value = kurumBul($("b-kurum").value).gun; kurumInfo(); });
-function resetAppForm(){
-  editingApp = null;
-  $("b-kurum").value = data && data.sektor === "ozel" ? "isveren" : "kurum"; $("b-tarih").value = today();
-  ["b-sayi", "b-konu", "b-ctarih", "b-sonuc", "b-not"].forEach((id) => { $(id).value = ""; });
-  $("b-durum").value = "Bekliyor"; $("b-sure").value = kurumBul($("b-kurum").value).gun; kurumInfo(); say("b-msg");
-  $("b-save").textContent = "Başvuruyu kaydet";
-}
-function editApp(id){
-  const a = data.basvurular.find((x) => x.id === id); if(!a) return;
-  go("basvuru-form", { keepForm: true }); editingApp = id;
-  $("b-kurum").value = a.kurum; $("b-tarih").value = a.tarih; $("b-sayi").value = a.sayi || ""; $("b-konu").value = a.konu || "";
-  $("b-durum").value = a.durum; $("b-sure").value = a.sure; $("b-ctarih").value = a.cevapTarihi || ""; $("b-sonuc").value = a.sonuc || ""; $("b-not").value = a.not || "";
-  kurumInfo(); say("b-msg"); $("b-save").textContent = "Değişiklikleri kaydet";
-}
-$("b-save").addEventListener("click", async () => {
-  if(!$("b-tarih").value) return say("b-msg", "err", "Başvuru tarihini gir.");
-  const a = { kurum: $("b-kurum").value, tarih: $("b-tarih").value, sayi: $("b-sayi").value.trim(), konu: $("b-konu").value.trim(),
-    durum: $("b-durum").value, sure: Math.max(1, +$("b-sure").value || 30), cevapTarihi: $("b-ctarih").value, sonuc: $("b-sonuc").value.trim(), not: $("b-not").value.trim() };
-  if(editingApp) Object.assign(data.basvurular.find((x) => x.id === editingApp), a);
-  else data.basvurular.push(Object.assign({ id: uid("b"), kayitZamani: new Date().toISOString() }, a));
-  try { await persist(); go("basvurular"); } catch(e){ say("b-msg", "err", "Kaydedilemedi."); }
-});
-function renderApps(){
-  const box = $("appList"); box.textContent = "";
-  const list = data.basvurular.slice().sort((a, b) => b.tarih.localeCompare(a.tarih));
-  if(!list.length){ const e = el("div", "empty"); e.appendChild(el("b", null, "Henüz başvuru yok")); e.appendChild(el("span", null, "Bir dilekçe verdiğinde ya da şikâyette bulunduğunda buraya ekle. Cevap süresini senin yerine takip ederim.")); box.appendChild(e); return; }
-  list.forEach((a) => {
-    const st = appStatus(a), c = el("div", "app-item");
-    const h = el("div", "head"); const t = el("div"); t.appendChild(el("b", null, kurumBul(a.kurum).ad)); t.appendChild(el("div", "note small", `${trDate(a.tarih)}${a.sayi ? " · No: " + a.sayi : ""}`));
-    h.appendChild(t); h.appendChild(el("span", "chip " + st.cls, st.text)); c.appendChild(h);
-    if(a.konu) c.appendChild(el("p", null, a.konu));
-    if(a.cevapTarihi || a.sonuc) c.appendChild(el("p", "note", `Cevap: ${a.cevapTarihi ? trDate(a.cevapTarihi) : ""} ${a.sonuc || ""}`));
-    if(a.not) c.appendChild(el("p", "note small", a.not));
-    const b = el("div", "btns");
-    const ed = el("button", "btn ghost small", "Düzenle"); ed.type = "button"; ed.addEventListener("click", () => editApp(a.id));
-    const del = el("button", "btn ghost danger small", "Sil"); del.type = "button";
-    twoStep(del, "Emin misin?", async () => { data.basvurular = data.basvurular.filter((x) => x.id !== a.id); await persist(); renderApps(); });
-    b.appendChild(ed); b.appendChild(del); c.appendChild(b); box.appendChild(c);
-  });
+function tumBelgeIdleri(d){
+  d = d || data; const ids = [];
+  d.records.forEach((r) => { r.belgeler.forEach((b) => ids.push(b.id)); (r.ekler || []).forEach((e) => (e.belgeler || []).forEach((b) => ids.push(b.id))); });
+  d.taslaklar.forEach((t) => t.belgeler.forEach((b) => ids.push(b.id)));
+  d.basvurular.forEach((b) => { (b.belgeler || []).forEach((x) => ids.push(x.id)); (b.gelismeler || []).forEach((g) => (g.belgeler || []).forEach((x) => ids.push(x.id))); });
+  return ids;
 }
 
-/* ---------- 12. ÖZET ---------- */
-function bars(box, counts, labelFn){
-  box.textContent = "";
-  const keys = Object.keys(counts).sort((a, b) => counts[b] - counts[a]);
-  if(!keys.length){ box.appendChild(el("p", "note", "Kayıt ekledikçe burada dağılım görünecek.")); return; }
-  const max = counts[keys[0]];
-  keys.forEach((k) => {
-    const row = el("div", "bar"); row.appendChild(el("span", "name", labelFn ? labelFn(k) : k));
-    const t = el("div", "track"), f = el("div", "fill"); f.style.width = (counts[k] / max * 100) + "%"; t.appendChild(f); row.appendChild(t);
-    row.appendChild(el("span", "n", String(counts[k]))); box.appendChild(row);
-  });
-}
-function renderSummary(){
-  const R = data.records, s = $("sumStats"); s.textContent = "";
-  const sorted = sortAsc(R), first = sorted[0], last = sorted[sorted.length - 1];
-  const sevs = R.filter((r) => r.siddet).map((r) => r.siddet);
-  stat(s, String(R.length), "toplam olay");
-  stat(s, first ? (daysBetween(first.olayZamani, last.olayZamani) + 1) + " gün" : "–", "kapsanan süre");
-  stat(s, String(new Set(R.map((r) => r.kisi)).size), "kişi");
-  stat(s, sevs.length ? (sevs.reduce((a, b) => a + b, 0) / sevs.length).toFixed(1) : "–", "ort. şiddet");
-  stat(s, String(R.filter((r) => r.tanik).length), "tanıklı olay");
-  stat(s, String(R.filter((r) => (r.fotolar || []).length).length), "fotoğraflı olay");
-  // Aylar
-  const m = $("months"); m.textContent = "";
-  const now = new Date(); const months = [];
-  for(let i = 11; i >= 0; i--){ const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push({ k: `${d.getFullYear()}-${pad(d.getMonth() + 1)}`, lbl: d.toLocaleDateString("tr-TR", { month: "short" }) }); }
-  const cnt = {}; R.forEach((r) => { const k = r.olayZamani.slice(0, 7); cnt[k] = (cnt[k] || 0) + 1; });
-  const mx = Math.max(1, ...months.map((x) => cnt[x.k] || 0));
-  months.forEach((x) => {
-    const v = cnt[x.k] || 0, w = el("div", "m");
-    w.appendChild(el("span", "v", v ? String(v) : ""));
-    const col = el("div", "col" + (v ? "" : " zero")); col.style.height = (v / mx * 100) + "%"; w.appendChild(col);
-    w.appendChild(el("span", "lbl", x.lbl)); m.appendChild(w);
-  });
-  // Haftalar
-  const wk = $("weeks"); wk.textContent = "";
-  const w26 = last26Weeks(R); w26.forEach((x) => { const i = el("i", x.on ? "on" : ""); i.title = trDate(x.k) + " haftası"; wk.appendChild(i); });
-  const on = w26.filter((x) => x.on).length;
-  $("weeksText").textContent = `Her kare bir hafta. Son 26 haftanın ${on} tanesinde olay kaydın var. Leymann'a göre mobbingde davranışlar en az 6 ay boyunca en az haftada bir tekrarlanır.`;
-  const bp = {}, bk = {}, bs = {};
-  R.forEach((r) => { bp[r.kisi] = (bp[r.kisi] || 0) + 1; bk[r.kategori] = (bk[r.kategori] || 0) + 1; const sv = r.siddet || 0; bs[sv] = (bs[sv] || 0) + 1; });
-  bars($("byPerson"), bp); bars($("byKat"), bk, (k) => katBul(k).kisa); bars($("bySev"), bs, (k) => (+k ? k + " · " : "") + SEV_AD[+k]);
-}
-
-/* ---------- 13. RAPOR ---------- */
-function prepReport(){
-  fillSelect($("r-kim"), uniq("kisi"), "Herkes");
-  const s = sortAsc(data.records);
-  if(!$("r-bas").value && s.length) $("r-bas").value = s[0].olayZamani.slice(0, 10);
-  if(!$("r-bit").value) $("r-bit").value = today();
-  reportCount();
-}
-function reportRecords(){
-  const bas = $("r-bas").value || "0000", bit = $("r-bit").value || "9999", k = $("r-kim").value;
-  return sortAsc(data.records).filter((r) => r.olayZamani.slice(0, 10) >= bas && r.olayZamani.slice(0, 10) <= bit && (!k || r.kisi === k));
-}
-function reportCount(){ const R = reportRecords(); const f = R.reduce((a, r) => a + (r.fotolar || []).length, 0); $("r-count").textContent = `Rapora ${R.length} olay ve ${f} fotoğraf girecek.`; }
-["r-bas", "r-bit", "r-kim"].forEach((id) => $(id).addEventListener("change", reportCount));
-
-async function buildReport(){
-  const R = reportRecords(), nums = numbering(), p = data.profil || {};
-  const withFoto = $("r-foto").checked, withHealth = $("r-saglik").checked;
-  const now = new Date(), fileNo = `OD-${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}`;
-  const ad = p.ad || "[Ad Soyad]";
-  const run = `<div class="p-runhead"><span>Olay Dosyası · ${esc(ad)}</span><span>Dosya No: ${fileNo}</span></div>`;
-  const ekler = []; R.forEach((r) => (r.fotolar || []).forEach((f) => ekler.push({ r, f, no: "Ek-" + (ekler.length + 1) })));
-  const ekMap = new Map(ekler.map((e) => [e.f.id, e.no]));
-  const donem = R.length ? `${trDate(R[0].olayZamani)} – ${trDate(R[R.length - 1].olayZamani)}` : "–";
-  let h = "";
-  // Kapak
-  h += `<section class="p-page p-cover"><div>
-    <h1>İŞYERİNDE PSİKOLOJİK TACİZ (MOBBİNG)<br>OLAY DOSYASI</h1>
-    <p class="sub">Kronolojik olay kayıtları, tanık ve başvuru listeleri ile ekler</p>
-    <table class="p-meta">
-      <tr><td>Hazırlayan</td><td>${esc(ad)}</td></tr>
-      <tr><td>Unvanı</td><td>${esc(p.unvan || "–")}</td></tr>
-      ${p.sicil ? `<tr><td>Sicil No</td><td>${esc(p.sicil)}</td></tr>` : ""}
-      <tr><td>Kurumu</td><td>${esc(p.kurum || "–")}</td></tr>
-      <tr><td>Birimi</td><td>${esc(p.birim || "–")}</td></tr>
-      <tr><td>Kapsadığı dönem</td><td>${donem}</td></tr>
-      <tr><td>Olay sayısı</td><td>${R.length}</td></tr>
-      <tr><td>Ek sayısı</td><td>${withFoto ? ekler.length : 0}</td></tr>
-      <tr><td>Dosya No</td><td>${fileNo}</td></tr>
-      <tr><td>Hazırlanma tarihi</td><td>${now.toLocaleDateString("tr-TR")} ${pad(now.getHours())}:${pad(now.getMinutes())}</td></tr>
-    </table></div>
-    <div class="p-conf"><b>GİZLİDİR</b> — Bu dosya kişisel veriler içerir. Yalnızca yetkili merciler ve hukuki temsilci tarafından incelenmek üzere hazırlanmıştır.</div>
-  </section>`;
-  // İçindekiler
-  const bolumler = ["Özet", "Olay çizelgesi", "Olay ayrıntıları", "Tanık listesi", "Başvuru takip tablosu", "Ekler listesi" + (withFoto && ekler.length ? " ve ekler" : ""), "Beyan"];
-  h += `<section class="p-page">${run}<h2 class="p-h">İÇİNDEKİLER</h2><table class="p-toc">${bolumler.map((b, i) => `<tr><td>${i + 1}. ${b}</td><td>Bölüm ${i + 1}</td></tr>`).join("")}</table>
-    <p class="p-note">Açıklamalar: Olaylar, yaşandıkları tarih sırasına göre "O-001" biçiminde numaralandırılmıştır. "Kayda geçirildiği an", olayın uygulamaya girildiği tarih ve saattir ve sonradan değiştirilemez. Sonradan düzenlenen kayıtlarda son düzenleme zamanı ayrıca belirtilmiştir. Davranış grupları Heinz Leymann'ın sınıflamasına dayanır.</p></section>`;
-  // 1. Özet
-  const kisiler = {}; R.forEach((r) => { const k = kisiler[r.kisi] || (kisiler[r.kisi] = { rol: r.rol, n: 0, ilk: r.olayZamani, son: r.olayZamani }); k.n++; k.son = r.olayZamani; if(r.rol) k.rol = r.rol; });
-  const kats = {}; R.forEach((r) => { kats[r.kategori] = (kats[r.kategori] || 0) + 1; });
-  const weeks = new Set(R.map((r) => weekKey(r.olayZamani))).size;
-  const spanW = R.length ? Math.floor(daysBetween(R[0].olayZamani, R[R.length - 1].olayZamani) / 7) + 1 : 0;
-  const sevs = R.filter((r) => r.siddet).map((r) => r.siddet);
-  h += `<section class="p-page">${run}<h2 class="p-h">1. ÖZET</h2>
-    <table class="p-tbl"><tbody>
-      <tr><th>Toplam olay</th><td>${R.length}</td><th>Kapsadığı dönem</th><td>${donem}</td></tr>
-      <tr><th>Olay yaşanan hafta</th><td>${weeks} / ${spanW} hafta</td><th>Ortalama şiddet (1–5)</th><td>${sevs.length ? (sevs.reduce((a, b) => a + b, 0) / sevs.length).toFixed(1) : "–"}</td></tr>
-      <tr><th>Tanıklı olay</th><td>${R.filter((r) => r.tanik).length}</td><th>Belgeli / fotoğraflı olay</th><td>${R.filter((r) => r.kanit || (r.fotolar || []).length).length}</td></tr>
-    </tbody></table>
-    <p><b>Kişilere göre dağılım</b></p>
-    <table class="p-tbl"><thead><tr><th>Ad soyad</th><th>Görevi</th><th>Olay</th><th>İlk olay</th><th>Son olay</th></tr></thead><tbody>
-      ${Object.entries(kisiler).sort((a, b) => b[1].n - a[1].n).map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v.rol || "–")}</td><td>${v.n}</td><td>${trDate(v.ilk)}</td><td>${trDate(v.son)}</td></tr>`).join("")}
-    </tbody></table>
-    <p><b>Davranış gruplarına göre dağılım</b></p>
-    <table class="p-tbl"><thead><tr><th>Grup (Leymann)</th><th>Olay</th></tr></thead><tbody>
-      ${Object.entries(kats).sort((a, b) => b[1] - a[1]).map(([k, v]) => `<tr><td>${esc(katBul(k).ad)}</td><td>${v}</td></tr>`).join("")}
-    </tbody></table></section>`;
-  // 2. Çizelge
-  h += `<section class="p-page">${run}<h2 class="p-h">2. OLAY ÇİZELGESİ</h2>
-    <table class="p-tbl"><thead><tr><th>No</th><th>Tarih</th><th>Saat</th><th>Kişi</th><th>Davranış</th><th>Şiddet</th><th>Ek</th></tr></thead><tbody>
-    ${R.map((r) => `<tr><td>${nums.get(r.id)}</td><td>${trDate(r.olayZamani)}</td><td>${r.olayZamani.slice(11, 16)}</td><td>${esc(r.kisi)}</td><td>${esc(r.davranis || "–")}</td><td>${r.siddet || "–"}</td><td>${withFoto ? (r.fotolar || []).map((f) => ekMap.get(f.id)).join(", ") || "–" : "–"}</td></tr>`).join("")}
-    </tbody></table></section>`;
-  // 3. Ayrıntılar
-  h += `<section class="p-page">${run}<h2 class="p-h">3. OLAY AYRINTILARI</h2>
-    ${R.map((r) => {
-      const rows = [["Tarih / saat", `${trDate(r.olayZamani)} ${r.olayZamani.slice(11, 16)}`], ["Yer", r.yer], ["Kişi", r.kisi + (r.rol ? " (" + r.rol + ")" : "")],
-        ["Davranış grubu", katBul(r.kategori).ad], ["Davranış", r.davranis], ["Şiddet", r.siddet ? `${r.siddet} / 5 (${SEV_AD[r.siddet]})` : ""],
-        ["Olayın anlatımı", r.ne], ["Aynen söylenen söz", r.soz ? `"${r.soz}"` : ""], ["Tanıklar", r.tanik], ["Diğer kanıtlar", r.kanit],
-        ["Ekler", withFoto ? (r.fotolar || []).map((f) => `${ekMap.get(f.id)}${f.ad ? " (" + f.ad + ")" : ""}`).join(", ") : ""],
-        ["İşine etkisi", r.etkiIs], ["Sağlığına etkisi", withHealth ? r.etkiSaglik : ""],
-        ["Kayda geçirildiği an", trStamp(r.kayitZamani) + (r.duzenlenme ? ` (son düzenleme: ${trStamp(r.duzenlenme)})` : "")]];
-      return `<div class="p-ev"><div class="p-ev-h"><span>${nums.get(r.id)}</span><span>${trDate(r.olayZamani)} ${r.olayZamani.slice(11, 16)}</span></div><table>${rows.filter((x) => x[1]).map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join("")}</table></div>`;
-    }).join("")}</section>`;
-  // 4. Tanıklar
-  const tanik = {}; R.forEach((r) => (r.tanik || "").split(/[,;\n]/).map((x) => x.trim()).filter(Boolean).forEach((t) => { (tanik[t] = tanik[t] || []).push(nums.get(r.id)); }));
-  h += `<section class="p-page">${run}<h2 class="p-h">4. TANIK LİSTESİ</h2>
-    ${Object.keys(tanik).length ? `<table class="p-tbl"><thead><tr><th>Tanık</th><th>Tanık olduğu olaylar</th><th>Olay sayısı</th></tr></thead><tbody>
-    ${Object.entries(tanik).sort((a, b) => b[1].length - a[1].length).map(([t, l]) => `<tr><td>${esc(t)}</td><td>${l.join(", ")}</td><td>${l.length}</td></tr>`).join("")}</tbody></table>` : "<p>Kayıtlarda tanık belirtilmemiştir.</p>"}
-  </section>`;
-  // 5. Başvurular
-  const apps = data.basvurular.slice().sort((a, b) => a.tarih.localeCompare(b.tarih));
-  h += `<section class="p-page">${run}<h2 class="p-h">5. BAŞVURU TAKİP TABLOSU</h2>
-    ${apps.length ? `<table class="p-tbl"><thead><tr><th>#</th><th>Tarih</th><th>Merci</th><th>Evrak / No</th><th>Konu</th><th>Durum</th><th>Cevap</th></tr></thead><tbody>
-    ${apps.map((a, i) => `<tr><td>${i + 1}</td><td>${trDate(a.tarih)}</td><td>${esc(kurumBul(a.kurum).ad)}</td><td>${esc(a.sayi || "–")}</td><td>${esc(a.konu || "–")}</td><td>${esc(a.durum)}${a.durum === "Bekliyor" ? ` (${daysBetween(a.tarih, today())} gündür)` : ""}</td><td>${a.cevapTarihi ? trDate(a.cevapTarihi) : "–"}${a.sonuc ? " · " + esc(a.sonuc) : ""}</td></tr>`).join("")}
-    </tbody></table>` : "<p>Kayıtlı başvuru bulunmamaktadır.</p>"}</section>`;
-  // 6. Ekler
-  h += `<section class="p-page">${run}<h2 class="p-h">6. EKLER LİSTESİ</h2>
-    ${withFoto && ekler.length ? `<table class="p-tbl"><thead><tr><th>Ek no</th><th>İlgili olay</th><th>Açıklama</th><th>Eklenme</th></tr></thead><tbody>
-    ${ekler.map((e) => `<tr><td>${e.no}</td><td>${nums.get(e.r.id)} (${trDate(e.r.olayZamani)})</td><td>${esc(e.f.ad || "Fotoğraf")}</td><td>${trStamp(e.f.eklenme)}</td></tr>`).join("")}</tbody></table>` : "<p>Ek bulunmamaktadır.</p>"}</section>`;
-  if(withFoto) for(const e of ekler){
-    const src = await fotoDataUrl(e.f.id).catch(() => null);
-    if(src) h += `<section class="p-page">${run}<div class="p-ek"><img src="${src}" alt=""><p class="cap"><b>${e.no}</b> · ${nums.get(e.r.id)} numaralı olay (${trDate(e.r.olayZamani)}) · ${esc(e.f.ad || "Fotoğraf")}</p></div></section>`;
-  }
-  // 7. Beyan
-  h += `<section class="p-page">${run}<h2 class="p-h">7. BEYAN</h2>
-    <p>Bu dosyada yer alan bilgilerin, yaşadığım olaylara ilişkin olarak olayların yaşandığı tarihlerde ya da bu tarihlere yakın zamanlarda tuttuğum kendi kayıtlarım olduğunu ve bildiğim kadarıyla gerçeği yansıttığını beyan ederim.</p>
-    <p class="p-note">Ekler, olaylarla ilgili ekran görüntüleri ve belge fotoğraflarıdır. Gizlilik amacıyla fotoğrafların konum ve cihaz bilgileri kaldırılmıştır. İstenmesi hâlinde asılları ibraz edilebilir.</p>
-    <div class="p-sign"><div>${esc(ad)}<br>${esc(p.unvan || "")}<br><br>Tarih: ${now.toLocaleDateString("tr-TR")}<br><br>İmza</div></div></section>`;
-  return { html: h, fileNo };
-}
-async function waitImages(box){ await Promise.all([...box.querySelectorAll("img")].map((i) => i.complete ? null : new Promise((r) => { i.onload = i.onerror = r; }))); }
-async function printHtml(html){
-  const box = $("print"); box.innerHTML = html; await waitImages(box);
-  const clear = () => { box.textContent = ""; window.removeEventListener("afterprint", clear); };
-  window.addEventListener("afterprint", clear);
-  try { window.print(); } catch(e){ return false; }
-  return true;
-}
-$("r-print").addEventListener("click", async () => {
-  if(!reportRecords().length) return say("r-msg", "err", "Seçilen aralıkta olay yok.");
-  say("r-msg", "", "Rapor hazırlanıyor…");
-  const { html } = await buildReport();
-  const ok = await printHtml(html);
-  say("r-msg", ok ? "ok" : "err", ok ? "Yazdırma ekranı açıldı." : "Yazdırma açılamadı. \"Dosya olarak paylaş\"ı dene.");
-});
-$("r-share").addEventListener("click", async () => {
-  if(!reportRecords().length) return say("r-msg", "err", "Seçilen aralıkta olay yok.");
-  say("r-msg", "", "Dosya hazırlanıyor…");
-  const { html, fileNo } = await buildReport();
-  const r = await shareFile(`${fileNo}.html`, standaloneDoc("Olay Dosyası " + fileNo, html), "text/html");
-  say("r-msg", r === "cancel" ? "" : "ok", r === "cancel" ? "" : "Dosya hazır. Dosyalar'da açıp Paylaş › Yazdır diyebilirsin.");
-});
-function standaloneDoc(title, body){
-  const css = [...document.styleSheets].flatMap((s) => { try { return [...s.cssRules]; } catch(e){ return []; } })
-    .filter((r) => r.type === CSSRule.MEDIA_RULE && r.conditionText === "print").map((r) => [...r.cssRules].map((x) => x.cssText).join("\n")).join("\n");
-  return `<!doctype html><html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>
-<style>@page{size:A4;margin:16mm 15mm 18mm} body{margin:0;background:#fff;color:#000} #print{display:block!important;font-family:"Times New Roman",Georgia,serif;line-height:1.4;max-width:190mm;margin:0 auto;padding:10mm}
-${css.replace(/body > \*:not\(#print\)\{[^}]*\}/, "")}
-@media screen{.p-page{border-bottom:2px dashed #999;padding-bottom:10mm;margin-bottom:10mm}}</style></head><body><div id="print">${body}</div></body></html>`;
-}
-
-/* Dosya paylaşma: iPhone'da paylaş menüsü açılır */
-async function shareFile(name, text, mime){
-  const file = new File([text], name, { type: mime });
+/* ---------- 10. PAYLAŞIM, E-POSTA, TAKVİM ---------- */
+async function shareFile(name, content, mime, text){
+  const file = new File([content], name, { type: mime });
   if(navigator.canShare && navigator.canShare({ files: [file] })){
-    try { await navigator.share({ files: [file], title: name }); return "shared"; }
+    try { await navigator.share({ files: [file], title: name, text: text || undefined }); return "shared"; }
     catch(e){ if(e && e.name === "AbortError") return "cancel"; }
   }
   const url = URL.createObjectURL(file), a = document.createElement("a"); a.href = url; a.download = name;
-  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 10000);
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 15000);
   return "downloaded";
 }
+async function shareText(title, text){
+  if(navigator.share){ try { await navigator.share({ title, text }); return "shared"; } catch(e){ if(e && e.name === "AbortError") return "cancel"; } }
+  try { await navigator.clipboard.writeText(text); return "copied"; } catch(e){ return "fail"; }
+}
+function mailAc(to, subject, body){
+  const u = `mailto:${encodeURIComponent(to || "")}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body.slice(0, 7000))}`;
+  window.location.href = u;
+}
+function icsDosya(L){
+  const st = (s) => s.replace(/-/g, ""), now = new Date().toISOString().replace(/[-:]/g, "").slice(0, 15) + "Z";
+  const ev = L.map((x, i) => [
+    "BEGIN:VEVENT", `UID:mkd-${st(x.son)}-${i}-${Math.random().toString(36).slice(2, 8)}@mkd`, `DTSTAMP:${now}`,
+    `DTSTART;VALUE=DATE:${st(x.son)}`, `DTEND;VALUE=DATE:${st(addDays(x.son, 1))}`,
+    `SUMMARY:${icsEsc("Son gün: " + x.ad)}`, `DESCRIPTION:${icsEsc((x.kaynakAd ? x.kaynakAd + ". " : "") + (x.kaynak ? "Dayanak: " + x.kaynak + ". " : "") + (x.not || ""))}`,
+    "BEGIN:VALARM", "TRIGGER:-P3D", "ACTION:DISPLAY", `DESCRIPTION:${icsEsc("3 gün kaldı: " + x.ad)}`, "END:VALARM",
+    "BEGIN:VALARM", "TRIGGER:-P1D", "ACTION:DISPLAY", `DESCRIPTION:${icsEsc("Yarın son gün: " + x.ad)}`, "END:VALARM",
+    "END:VEVENT"].join("\r\n")).join("\r\n");
+  return `BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//MKD//TR\r\nCALSCALE:GREGORIAN\r\n${ev}\r\nEND:VCALENDAR\r\n`;
+}
+function icsEsc(s){ return String(s).replace(/\\/g, "\\\\").replace(/;/g, "\\;").replace(/,/g, "\\,").replace(/\n/g, "\\n"); }
+async function takvimeEkle(L){
+  const r = await shareFile(`mkd-sure-${today()}.ics`, icsDosya(L), "text/calendar");
+  if(r !== "cancel") toast("Takvim dosyası hazır. Açınca iPhone Takvim'e eklenir.");
+}
 
-/* ---------- 14. DİLEKÇE ---------- */
-const SABLONLAR = [
-  { k: "kurum", ad: "Kurum içi şikâyet dilekçesi (kamu)", makam: (p) => `${p.kurum ? p.kurum.toLocaleUpperCase("tr") + " " : ""}[MÜDÜRLÜĞÜNE / BAŞHEKİMLİĞİNE]`, bilgi: "657 sayılı Kanun md. 21 gereği şikâyet amir sırasıyla yapılır. Dilekçeyi önce bağlı olduğun ilk amire hitaben yaz ve evrak kaydına sokup sayı al." },
-  { k: "isveren", ad: "İşverene yazılı bildirim (özel sektör)", makam: (p) => `${p.kurum ? p.kurum.toLocaleUpperCase("tr") + " " : "[ŞİRKET UNVANI] "}İNSAN KAYNAKLARI MÜDÜRLÜĞÜNE`, bilgi: "Bildirimi e-posta ya da noter aracılığıyla gönderirsen tarihi ispat edilebilir olur. Bir kopyasını sakla." },
-  { k: "cimer", ad: "CİMER başvuru metni", makam: () => "CUMHURBAŞKANLIĞI İLETİŞİM MERKEZİ (CİMER)", bilgi: "CİMER başvurusu cimer.gov.tr üzerinden e-Devlet ile yapılır. Metni oradaki açıklama alanına yapıştırabilirsin." },
-  { k: "kdk", ad: "Kamu Denetçiliği Kurumu başvurusu", makam: () => "KAMU DENETÇİLİĞİ KURUMU BAŞKANLIĞINA", bilgi: "KDK'ya başvurmadan önce idareye başvurmuş olman gerekir (6328 s.K. md. 17). Başvurular ücretsizdir ve gizli tutulması istenebilir." }
-];
-(function(){ const s = $("d-tur"); SABLONLAR.forEach((t) => { const o = el("option", null, t.ad); o.value = t.k; s.appendChild(o); }); })();
-function prepDilekce(){
-  if(!$("d-tur").dataset.init){ $("d-tur").value = data.sektor === "ozel" ? "isveren" : "kurum"; $("d-tur").dataset.init = "1"; }
-  dilekceDefaults();
-}
-function dilekceDefaults(){ const t = SABLONLAR.find((x) => x.k === $("d-tur").value); $("d-makam").value = t.makam(data.profil || {}); $("d-info").textContent = t.bilgi; }
-$("d-tur").addEventListener("change", dilekceDefaults);
-function olaySecimi(){
-  let R = sortAsc(data.records);
-  if($("d-olay").value === "agir") R = R.filter((r) => (r.siddet || 0) >= 3);
-  if($("d-olay").value === "son5") R = R.slice(-5);
-  return R;
-}
-function buildDilekce(){
-  const t = $("d-tur").value, p = data.profil || {}, R = olaySecimi(), all = sortAsc(data.records), nums = numbering();
-  const ad = p.ad || "[Ad Soyad]", unvan = p.unvan || "[Unvan]", birim = p.birim || "[Birim]", kurum = p.kurum || "[Kurum]";
-  const kisiler = [...new Set(R.map((r) => r.kisi + (r.rol ? ` (${r.rol})` : "")))].join(", ") || "[ilgili kişi]";
-  const ilk = all.length ? trDate(all[0].olayZamani) : "[tarih]", son = all.length ? trDate(all[all.length - 1].olayZamani) : "[tarih]";
-  const satirlar = R.map((r) => `- ${nums.get(r.id)} · ${trDate(r.olayZamani)} ${r.olayZamani.slice(11, 16)} · ${r.kisi}: ${r.davranis || ""}. ${shorten(r.ne, 160)}${r.soz ? ` Söylenen söz: "${shorten(r.soz, 120)}"` : ""}${r.tanik ? ` (Tanık: ${r.tanik})` : ""}`).join("\n");
-  const ekSay = all.reduce((a, r) => a + (r.fotolar || []).length, 0);
-  const tarih = new Date().toLocaleDateString("tr-TR");
-  const imza = `${ad}\n${unvan}${p.sicil ? "\nSicil No: " + p.sicil : ""}\n${birim} / ${kurum}\nİmza:`;
-  const ek = `EK: Kronolojik olay dosyası (${all.length} olay${ekSay ? ", " + ekSay + " fotoğraf eki" : ""})`;
-  const makam = $("d-makam").value.trim();
-  if(t === "kurum") return `${tarih}\n\n${makam}\n\nKonu: İşyerinde psikolojik taciz (mobbing) şikâyeti hk.\n\n${kurum} ${birim} biriminde ${unvan} olarak görev yapmaktayım. ${ilk} – ${son} tarihleri arasında, aşağıda özetlenen ve kayıt altına aldığım ${all.length} ayrı olayda ${kisiler} tarafından sistematik biçimde psikolojik tacize (mobbing) maruz kaldığımı düşünmekteyim.\n\nOlayların özeti:\n${satirlar}\n\nTüm olayların tarih sırasıyla ayrıntılı dökümü ve ilgili belgeler ekte sunulmuştur.\n\n2025/3 sayılı Cumhurbaşkanlığı Genelgesi ve 657 sayılı Devlet Memurları Kanunu'nun 21. maddesi çerçevesinde;\n1. Şikâyetimin incelenerek gerekli idari ve disiplin soruşturmasının başlatılmasını,\n2. İnceleme sürecinde gizliliğin korunmasını ve bu başvurum nedeniyle aleyhime herhangi bir işlem yapılmamasını,\n3. Psikolojik tacizin sona erdirilmesi için gerekli önlemlerin alınmasını,\n4. Başvurumla ilgili sonucun tarafıma yazılı olarak bildirilmesini\n\nsaygılarımla arz ederim.\n\n${imza}\n\n${ek}`;
-  if(t === "isveren") return `${tarih}\n\n${makam}\n\nKonu: İşyerinde psikolojik taciz (mobbing) bildirimi ve önlem alınması talebi\n\nŞirketinizde ${birim} biriminde ${unvan} olarak çalışmaktayım. ${ilk} – ${son} tarihleri arasında, aşağıda özetlenen ${all.length} ayrı olayda ${kisiler} tarafından sistematik biçimde psikolojik tacize (mobbing) maruz kalmaktayım.\n\nOlayların özeti:\n${satirlar}\n\nTürk Borçlar Kanunu'nun 417. maddesi uyarınca işveren, işçilerin psikolojik tacize uğramamaları ve uğrayanların daha fazla zarar görmemeleri için gerekli önlemleri almakla yükümlüdür.\n\nBu nedenle;\n1. Bildirimimin incelenmesini,\n2. Psikolojik tacizin sona erdirilmesi için gerekli önlemlerin derhal alınmasını,\n3. Bu bildirimim nedeniyle aleyhime herhangi bir işlem yapılmamasını,\n4. Alınan önlemlerin tarafıma yazılı olarak bildirilmesini\n\ntalep eder, tüm yasal haklarımı saklı tuttuğumu bildiririm.\n\n${imza}\n\n${ek}`;
-  if(t === "cimer") return `${kurum} ${birim} biriminde ${unvan} olarak görev yapmaktayım. ${ilk} – ${son} tarihleri arasında ${kisiler} tarafından ${all.length} ayrı olayda sistematik olarak psikolojik tacize (mobbing) maruz kaldım. Başlıca olaylar:\n${satirlar}\n\n2025/3 sayılı Cumhurbaşkanlığı Genelgesi kapsamında şikâyetimin incelenmesini, gerekli idari tedbirlerin alınmasını ve başvurumun gizli tutulmasını talep ederim. Olayların ayrıntılı kronolojik dökümü ve belgeler talep hâlinde sunulabilir.\n\n${ad}`;
-  const idari = data.basvurular.filter((a) => a.kurum === "kurum").sort((a, b) => b.tarih.localeCompare(a.tarih))[0];
-  const idariMetin = idari ? `Bu konuda idareye ${trDate(idari.tarih)} tarihli${idari.sayi ? " ve " + idari.sayi + " sayılı" : ""} dilekçemle başvurdum. ${idari.durum === "Bekliyor" ? "Başvuruma bugüne kadar cevap verilmemiştir." : "Başvuruma verilen cevap: " + (idari.sonuc || "[cevabı özetle]") + "."}` : "Bu konuda idareye [tarih] tarihli ve [sayı] sayılı dilekçemle başvurdum. [Cevap verilmedi / verilen cevap].";
-  return `${tarih}\n\n${makam}\n\nKonu: İşyerinde psikolojik taciz (mobbing) hakkında şikâyet\n\n${kurum} ${birim} biriminde ${unvan} olarak görev yapmaktayım. ${ilk} – ${son} tarihleri arasında ${kisiler} tarafından ${all.length} ayrı olayda sistematik olarak psikolojik tacize (mobbing) maruz kaldım.\n\nOlayların özeti:\n${satirlar}\n\n${idariMetin}\n\n6328 sayılı Kamu Denetçiliği Kurumu Kanunu uyarınca idarenin işlem ve eylemlerinin incelenmesini, gerekli tavsiye kararının verilmesini ve 17. madde uyarınca kimlik bilgilerimin gizli tutulmasını saygılarımla arz ederim.\n\n${imza}\n\n${ek}`;
-}
-$("d-olustur").addEventListener("click", () => {
-  if(!data.records.length) return say("d-msg", "err", "Önce en az bir olay kaydet.");
-  $("d-metin").value = buildDilekce(); $("d-out").hidden = false; say("d-msg");
-  if(!(data.profil && data.profil.ad)) say("d-msg", "err", "Profil bilgilerin eksik. Menü › Profil ve tema'dan doldurursan dilekçeye otomatik eklenir.");
-  $("d-out").scrollIntoView({ behavior: "smooth" });
-});
-$("d-print").addEventListener("click", () => printHtml(`<section class="p-letter">${$("d-metin").value.split(/\n{2,}/).map((p) => `<p>${esc(p)}</p>`).join("")}</section>`));
-$("d-copy").addEventListener("click", async () => {
-  try { await navigator.clipboard.writeText($("d-metin").value); say("d-msg", "ok", "Kopyalandı."); }
-  catch(e){ $("d-metin").select(); say("d-msg", "err", "Metin seçildi, kendin kopyala."); }
-});
-$("d-share").addEventListener("click", async () => { const r = await shareFile(`dilekce-${today()}.txt`, $("d-metin").value, "text/plain"); if(r !== "cancel") say("d-msg", "ok", "Paylaşıldı."); });
-
-/* ---------- 15. AYARLAR VE YEDEK ---------- */
-function applySektor(){
-  document.querySelectorAll("[data-sek]").forEach((n) => {
-    if(n.tagName === "BUTTON") n.setAttribute("aria-pressed", String(n.dataset.sek === data.sektor));
-    else n.hidden = n.dataset.sek !== data.sektor;
-  });
-}
-document.querySelectorAll(".seg button[data-sek]").forEach((b) => b.addEventListener("click", async () => {
-  if(!data) return; data.sektor = b.dataset.sek; applySektor(); try { await persist(); } catch(e){}
-}));
-function fillProfile(){ const p = data.profil || {}; ["ad", "unvan", "sicil", "kurum", "birim", "hitap"].forEach((k) => { $("pr-" + k).value = p[k] || ""; }); say("pr-msg"); }
-$("pr-save").addEventListener("click", async () => {
-  data.profil = {}; ["ad", "unvan", "sicil", "kurum", "birim", "hitap"].forEach((k) => { data.profil[k] = $("pr-" + k).value.trim(); });
-  try { await persist(); say("pr-msg", "ok", "Profil kaydedildi."); } catch(e){ say("pr-msg", "err", "Kaydedilemedi."); }
-});
-function fillSecurity(){
-  const v = (data.ayar && data.ayar.otoKilit != null) ? data.ayar.otoKilit : 60;
-  document.querySelectorAll("#lockSeg button").forEach((b) => b.setAttribute("aria-pressed", String(+b.dataset.l === v)));
-  $("g-wipe").checked = !!lsGet(LS_WIPE, false); say("c-msg");
-}
-document.querySelectorAll("#lockSeg button").forEach((b) => b.addEventListener("click", async () => { data.ayar = data.ayar || {}; data.ayar.otoKilit = +b.dataset.l; fillSecurity(); await persist().catch(() => {}); }));
-$("g-wipe").addEventListener("change", () => lsSet(LS_WIPE, $("g-wipe").checked));
-$("c-btn").addEventListener("click", async () => {
-  const p1 = $("c-pin").value, p2 = $("c-pin2").value;
-  if(!validPin(p1)) return say("c-msg", "err", "PIN 4 ile 8 rakam arasında olmalı.");
-  if(p1 !== p2) return say("c-msg", "err", "İki PIN aynı değil.");
-  say("c-msg", "", "PIN değiştiriliyor…");
-  try { await rekey(p1); $("c-pin").value = ""; $("c-pin2").value = ""; say("c-msg", "ok", "PIN değişti. Eski yedekler eski PIN'le açılır; yeni bir yedek al."); }
-  catch(e){ say("c-msg", "err", "PIN değiştirilemedi."); }
-});
-twoStep($("wipeBtn"), "Emin misin? Geri alınamaz", async () => { await clearAll(); lsDel(LS_FAIL); lock(); });
-
-function showBackupInfo(){
-  const t = data.lastBackup ? "Son yedek: " + trStamp(data.lastBackup) : "Henüz yedek almadın";
-  $("lastBackup").textContent = t; $("menuBackup").textContent = t;
-}
-$("bkShare").addEventListener("click", async () => {
-  say("bkMsg", "", "Yedek hazırlanıyor…");
-  data.lastBackup = new Date().toISOString(); await persist();
+/* ---------- 11. YEDEK ---------- */
+async function yedekAl(){
+  data.lastBackup = nowIso(); gunlukEkle("yedek", "Yedek alındı"); await save();
   const fotolar = [];
-  for(const id of allFotoIds()){ const r = await fotoGet(id); if(r) fotolar.push({ id, iv: b64(r.iv), ct: b64(r.ct) }); }
-  const yedek = { tur: "kayit-defteri-yedek", v: 2, olusturma: data.lastBackup, kasa: await kvGet("kasa"), fotolar };
-  const r = await shareFile(`defter-yedek-${today()}.json`, JSON.stringify(yedek), "application/json");
-  if(r === "cancel") return say("bkMsg", "", "Yedek alma iptal edildi.");
-  showBackupInfo(); say("bkMsg", "ok", "Yedek hazır. \"Dosyalar'a Kaydet\" ile iCloud Drive'a kaydet.");
-});
-$("bkRestore").addEventListener("click", () => {
-  if(!validPin($("bk-pin").value)) return say("bkMsg2", "err", "Önce yedeği aldığın PIN'i yaz.");
-  $("bk-file").value = ""; $("bk-file").click();
-});
-$("bk-file").addEventListener("change", async () => {
-  const f = $("bk-file").files[0]; if(!f) return;
-  say("bkMsg2", "", "Yedek açılıyor…");
-  try {
-    const j = JSON.parse(await f.text());
-    const kasa = j.kasa || j;                       // ilk sürüm yedekleri doğrudan kasadır
-    const r = await openKasa($("bk-pin").value, kasa);
-    const gelen = upgradeData(r.data);
-    const haveR = new Set(data.records.map((x) => x.id)), haveA = new Set(data.basvurular.map((x) => x.id));
-    const yeniR = gelen.records.filter((x) => !haveR.has(x.id)), yeniA = (gelen.basvurular || []).filter((x) => !haveA.has(x.id));
-    const fmap = new Map((j.fotolar || []).map((x) => [x.id, x]));
-    for(const rec of yeniR) for(const ft of rec.fotolar || []){
-      const src = fmap.get(ft.id); if(!src) continue;
-      const plain = await decBytes(r.key, unb64(src.iv), unb64(src.ct));
-      await fotoPut(ft.id, await encBytes(key, plain));
+  for(const id of tumBelgeIdleri()){ const r = await fotoGet(id); if(r) fotolar.push({ id, iv: b64(r.iv), ct: b64(r.ct), tur: r.tur || "img", mime: r.mime || "image/jpeg" }); }
+  const yedek = { tur: "mkd-yedek", v: 3, olusturma: data.lastBackup, kasa: await kvGet("kasa"), fotolar };
+  return shareFile(`mkd-yedek-${today()}.json`, JSON.stringify(yedek), "application/json");
+}
+// Yedek, mevcut kayıtların üzerine yazmaz. Boş deftere tamamen, dolu deftere yalnızca eksikleri ekler.
+async function yedekYukle(file, secret, cevapMi){
+  const j = JSON.parse(await file.text());
+  const kasa = j.kasa || j; let gelen, gelenKey;
+  if(kasa.v === 3){
+    const raw = await unwrapDek(cevapMi ? normCevap(secret) : secret, cevapMi ? kasa.kur : kasa.pin);
+    const r = await openVeri(raw, kasa); gelen = tamamla(r.d); gelenKey = r.k;
+  } else {
+    const e = await openKasaEski(secret, kasa);
+    gelen = await eskiYedegiDonustur(e, j);
+    return yedekBirlestir(gelen, null, j, true);
+  }
+  return yedekBirlestir(gelen, gelenKey, j, false);
+}
+async function eskiYedegiDonustur(eski, j){
+  // Eski sürüm yedeği: fotoğraflar eski anahtarla çözülüp bu defterin anahtarıyla şifrelenir
+  const fmap = new Map((j.fotolar || []).map((x) => [x.id, x]));
+  const d = eski.data, sorted = (d.records || []).slice().sort((a, b) => (a.kayitZamani || "").localeCompare(b.kayitZamani || ""));
+  const nd = yeniVeri(d.sektor, (d.profil || {}).hitap); nd.profil = Object.assign(nd.profil, d.profil || {});
+  for(const r of sorted){
+    const belgeler = [];
+    for(const f of r.fotolar || []){
+      const src = fmap.get(f.id); if(!src) continue;
+      try { const plain = await decBytes(eski.key, unb64(src.iv), unb64(src.ct)); const e2 = await encBytes(dek, plain); await fotoPut(f.id, { iv: e2.iv, ct: e2.ct, tur: "img", mime: "image/jpeg" }); belgeler.push({ id: f.id, ad: f.ad || "", tur: "img", eklenme: f.eklenme || r.kayitZamani }); } catch(e){}
     }
-    data.records = data.records.concat(yeniR); data.basvurular = data.basvurular.concat(yeniA);
-    if(!data.profil || !data.profil.ad) data.profil = Object.assign({}, gelen.profil, data.profil);
-    await persist(); refreshDatalists(); $("bk-pin").value = "";
-    say("bkMsg2", "ok", `${yeniR.length} olay ve ${yeniA.length} başvuru geri yüklendi.`);
-  } catch(e){ say("bkMsg2", "err", "Yedek açılamadı. PIN yanlış ya da dosya bu uygulamanın yedeği değil."); }
-});
+    nd.sayac++;
+    nd.records.push({ id: r.id || uid("k"), no: nd.sayac, olayZamani: r.olayZamani, yer: r.yer || "", kisi: r.kisi || "", rol: r.rol || "", kategori: r.kategori || "k0", davranis: r.davranis || r.tur || "",
+      siddet: r.siddet || 0, ne: r.ne || "", soz: r.soz || "", tanikIds: [], tanikAd: r.tanik || "", kanit: r.kanit || "", etkiIs: r.etkiIs || "", etkiSaglik: r.etkiSaglik || r.etki || "",
+      belgeler, taslakBaslangic: r.kayitZamani, kesinlesme: r.kayitZamani, oncekiSurum: true, ekler: [], geriCekme: null, gonderimler: [] });
+  }
+  return nd;
+}
+async function yedekBirlestir(gelen, gelenKey, j, fotolarHazir){
+  const fmap = new Map((j.fotolar || []).map((x) => [x.id, x]));
+  const kopyala = async (ids) => {
+    if(fotolarHazir) return;
+    for(const id of ids){ const src = fmap.get(id); if(!src) continue; if(await fotoGet(id)) continue;
+      const plain = await decBytes(gelenKey, unb64(src.iv), unb64(src.ct)); const e2 = await encBytes(dek, plain);
+      await fotoPut(id, { iv: e2.iv, ct: e2.ct, tur: src.tur || "img", mime: src.mime || "image/jpeg" }); }
+  };
+  if(!data.records.length && !data.basvurular.length){
+    // Boş defter: yedek olduğu gibi geri yüklenir (numaralar korunur)
+    await kopyala(tumBelgeIdleri(gelen));
+    const profil = Object.assign({}, gelen.profil, data.profil.ad ? data.profil : {});
+    const g = data.gunluk; data = gelen; data.profil = profil; data.gunluk = (gelen.gunluk || []).concat(g);
+    gunlukEkle("geriYukleme", `Yedekten geri yüklendi: ${data.records.length} kayıt, ${data.basvurular.length} başvuru.`);
+    await save(); return { tam: true, k: data.records.length, b: data.basvurular.length };
+  }
+  const ids = new Set(data.records.map((r) => r.id)), nos = new Map(data.records.map((r) => [r.no, r.id]));
+  const yeni = gelen.records.filter((r) => !ids.has(r.id));
+  const cakisan = yeni.filter((r) => nos.has(r.no));
+  if(cakisan.length) throw Object.assign(new Error("cakisma"), { kod: "cakisma" });
+  const yeniB = gelen.basvurular.filter((b) => !data.basvurular.some((x) => x.id === b.id));
+  const yeniT = gelen.taniklar.filter((t) => !data.taniklar.some((x) => x.id === t.id));
+  await kopyala(yeni.flatMap((r) => r.belgeler.map((b) => b.id).concat((r.ekler || []).flatMap((e) => (e.belgeler || []).map((b) => b.id)))).concat(yeniB.flatMap((b) => (b.belgeler || []).map((x) => x.id))));
+  data.records = data.records.concat(yeni); data.basvurular = data.basvurular.concat(yeniB); data.taniklar = data.taniklar.concat(yeniT);
+  data.sayac = Math.max(data.sayac, ...data.records.map((r) => r.no));
+  data.sayacB = Math.max(data.sayacB, ...data.basvurular.map((b) => b.no || 0), 0);
+  gunlukEkle("geriYukleme", `Yedekten ${yeni.length} kayıt, ${yeniB.length} başvuru eklendi.`);
+  await save(); return { tam: false, k: yeni.length, b: yeniB.length };
+}
 
-/* ---------- 16. GİZLİLİK PERDESİ VE OTOMATİK KİLİT ---------- */
-function onHide(){ if(data){ $("curtain").hidden = false; hiddenAt = Date.now(); if(data.ayar && data.ayar.otoKilit === 0) lock(); } }
+/* ---------- 12. GİZLİLİK PERDESİ, OTOMATİK KİLİT, BAŞLATMA ---------- */
+let hiddenAt = 0, bildirim = null;
+function onHide(){ if(data){ $("curtain").hidden = false; hiddenAt = Date.now(); save(); if(data.ayar.otoKilit === 0) lock(); } }
 document.addEventListener("visibilitychange", () => {
   if(document.hidden) return onHide();
   if(!data) return;
-  const limit = ((data.ayar && data.ayar.otoKilit != null) ? data.ayar.otoKilit : 60) * 1000;
-  if(Date.now() - hiddenAt > limit) lock(); else $("curtain").hidden = true;
+  if(Date.now() - hiddenAt > (data.ayar.otoKilit ?? 60) * 1000) lock(); else $("curtain").hidden = true;
 });
 window.addEventListener("pagehide", onHide);
+["gesturestart", "gesturechange", "gestureend"].forEach((ev) => document.addEventListener(ev, (e) => {
+  if(!e.target.closest || !e.target.closest("#viewer")) e.preventDefault();
+}, { passive: false }));
 
-/* ---------- 17. BAŞLATMA ---------- */
-(async function init(){
-  buildThemeControls(); applyTheme();
-  fillKatSelect($("f-kat"), false); fillDavSelect();
-  if(!window.crypto || !crypto.subtle || !window.indexedDB){ document.body.textContent = "Bu uygulama yalnızca güvenli (https) bağlantıda ve güncel bir tarayıcıda çalışır."; return; }
+let tema = Object.assign({ mod: "auto", boyut: 16 }, lsGet(LS_TEMA, {}));
+const darkMQ = window.matchMedia("(prefers-color-scheme: dark)");
+function applyTheme(){
+  const dark = tema.mod === "dark" || (tema.mod === "auto" && darkMQ.matches);
+  document.documentElement.dataset.mode = dark ? "dark" : "light";
+  document.documentElement.style.fontSize = (tema.boyut || 16) + "px";
+}
+darkMQ.addEventListener?.("change", applyTheme);
+
+document.addEventListener("DOMContentLoaded", async () => {
+  applyTheme();
+  if(!window.crypto || !crypto.subtle || !window.indexedDB){ document.body.innerHTML = "<p style='padding:24px;font-family:system-ui'>Bu uygulama yalnızca güvenli (https) bağlantıda ve güncel bir tarayıcıda çalışır.</p>"; return; }
   try {
-    // İlk sürümden kalan veriyi yeni depoya taşı
-    const v1 = lsGet(LS_V1, null);
-    if(v1 && !(await kvGet("kasa"))){ await kvSet("kasa", Object.assign({ iter: 250000 }, v1)); lsDel(LS_V1); }
+    const v1 = lsGet("defter-kasa-v1", null);   // ilk sürümden kalan veri
+    if(v1 && !(await kvGet("kasa"))){ await kvSet("kasa", Object.assign({ iter: 250000 }, v1)); localStorage.removeItem("defter-kasa-v1"); }
   } catch(e){}
   showLock();
   if("serviceWorker" in navigator) navigator.serviceWorker.register("sw.js").catch(() => {});
-})();
+});
