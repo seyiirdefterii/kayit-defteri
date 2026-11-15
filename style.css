@@ -20,7 +20,7 @@ html[data-mode="dark"]{
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%;background:var(--navy)}
-body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:1rem;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
+body{margin:0;background:var(--navy);color:var(--ink);font-family:var(--sans);font-size:1rem;line-height:1.45;-webkit-font-smoothing:antialiased;overscroll-behavior-y:none}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
 input,select,textarea{font:inherit;color:var(--ink)}
 svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none}
