@@ -2,7 +2,7 @@
 
 İşyerinde psikolojik tacize (mobbing) uğrayan çalışanların yaşadıkları olayları tarih, saat, kişi, tanık ve belgeleriyle düzenli, sistematik ve güvenilir biçimde kayıt altına almasına yardımcı olan kişisel bir telefon uygulaması (PWA). iPhone'da Safari ile açılıp **Paylaş › Ana Ekrana Ekle** ile uygulama gibi kullanılır.
 
-**Uygulama adresi:** https://slymnaltundagg.github.io/kayit-defteri/
+**Uygulama adresi:** https://seyiirdefterii.github.io/kayit-defteri/
 
 ## Neler yapar?
 
